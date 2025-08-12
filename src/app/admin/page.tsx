@@ -1,5 +1,8 @@
 'use client'
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabaseBrowser } from '@/lib/supabase'
@@ -290,5 +293,6 @@ export default function AdminPage() {
         </div>
       </div>
     </div>
+
   )
 }

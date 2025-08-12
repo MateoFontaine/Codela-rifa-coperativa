@@ -1,6 +1,6 @@
 // src/app/app/page.tsx
 'use client'
-
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabaseBrowser } from '@/lib/supabase'
@@ -208,7 +208,10 @@ export default function UserRaffle() {
     const j = await res.json()
     if (!res.ok) { alert(j?.error || 'No se pudo seleccionar al azar'); return }
 
-    const newHeld: number[] = (j.held || []).filter(n => !cart.includes(n))
+    // ✅ tipamos j.held para que el callback infiera number
+const held: number[] = Array.isArray(j?.held) ? (j.held as unknown[]).map((x) => Number(x)) : [];
+const newHeld: number[] = held.filter((n) => !cart.includes(n));
+
     if (newHeld.length === 0) { alert('No se encontraron números libres suficientes'); return }
 
     setCart(prev => Array.from(new Set([...prev, ...newHeld])))

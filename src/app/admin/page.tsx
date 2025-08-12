@@ -1,5 +1,7 @@
 'use client'
 /* eslint-disable @typescript-eslint/no-explicit-any */
+
+/* esto es de prueba */
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabaseBrowser } from '@/lib/supabase'

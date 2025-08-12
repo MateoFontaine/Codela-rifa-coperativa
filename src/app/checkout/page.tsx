@@ -1,46 +1,20 @@
 'use client'
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
-
-
+import { Suspense } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabaseBrowser } from '@/lib/supabase'
+
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 const PRICE_FALLBACK = 1000
 const MAX_PER_ORDER = 50
 
 type Bank = { alias: string; cvu: string; holder: string }
 type Support = { whatsapp: string }
+type OrderStatus = 'awaiting_proof' | 'under_review' | 'paid' | 'rejected' | 'canceled' | 'pending'
 
-type OrderStatus =
-  | 'awaiting_proof'
-  | 'under_review'
-  | 'paid'
-  | 'rejected'
-  | 'canceled'
-  | 'pending'
-
-type OrderRow = {
-  id: string
-  user_id: string
-  status: OrderStatus
-  total_amount: number | null
-  price_per_number: number | null
-}
-
-type NumRow = { id: number }
-type ProofRow = { file_url: string | null }
-
-type CreateOrderResp = {
-  orderId: string
-  total: number
-  price: number
-  numbers: number[]
-  error?: string
-}
-
-export default function CheckoutPage() {
+function CheckoutPageInner() {
   const supa = useMemo(() => supabaseBrowser(), [])
   const router = useRouter()
   const params = useSearchParams()
@@ -55,29 +29,19 @@ export default function CheckoutPage() {
   const [support, setSupport] = useState<Support | null>(null)
   const [loading, setLoading] = useState(true)
 
-  // proof existente (si ya subió)
   const [proofUrl, setProofUrl] = useState<string | null>(null)
-
-  // upload
   const [uploading, setUploading] = useState(false)
   const [file, setFile] = useState<File | null>(null)
-
-  // modal borrar
   const [confirmOpen, setConfirmOpen] = useState(false)
 
   useEffect(() => {
     ;(async () => {
       const { data: u } = await supa.auth.getUser()
       if (!u.user) { router.replace('/auth/login'); return }
-      const { data: prof } = await supa
-        .from('app_users')
-        .select('id,email')
-        .eq('auth_user_id', u.user.id)
-        .single()
+      const { data: prof } = await supa.from('app_users').select('id,email').eq('auth_user_id', u.user.id).single()
       if (!prof) { alert('Perfil no encontrado'); router.replace('/'); return }
       setProfile({ id: prof.id, email: prof.email })
 
-      // settings
       const [{ data: bankRow }, { data: supRow }] = await Promise.all([
         supa.from('settings').select('value').eq('key', 'bank').single(),
         supa.from('settings').select('value').eq('key', 'support').single(),
@@ -85,38 +49,32 @@ export default function CheckoutPage() {
       setBank((bankRow?.value as Bank) || null)
       setSupport((supRow?.value as Support) || null)
 
-      // ¿viene con order=...?
       const existingOrderId = params.get('order')
       if (existingOrderId) {
-        const { data: ordRaw, error: ordErr } = await supa
+        const { data: ord, error: ordErr } = await supa
           .from('orders')
           .select('id,user_id,status,total_amount,price_per_number')
           .eq('id', existingOrderId)
           .single()
-
-        const ord = ordRaw as OrderRow | null
         if (ordErr || !ord) { alert('Orden no encontrada'); router.replace('/app'); return }
         if (ord.user_id !== prof.id) { alert('No autorizado'); router.replace('/app'); return }
 
-        const [{ data: nums }, { data: prRaw }] = await Promise.all([
+        const [{ data: nums }, { data: pr }] = await Promise.all([
           supa.from('raffle_numbers').select('id').eq('order_id', ord.id),
           supa.from('payment_proofs').select('file_url').eq('order_id', ord.id).single(),
         ])
-
-        const list = ((nums as NumRow[]) || []).map(r => Number(r.id)).sort((a,b)=>a-b)
-        const pr = (prRaw as ProofRow | null) || null
+        const list = (nums || []).map(r => Number((r as { id: number }).id)).sort((a,b)=>a-b)
 
         setOrderId(ord.id)
-        setOrderStatus(ord.status || 'awaiting_proof')
+        setOrderStatus((ord.status as OrderStatus) || 'awaiting_proof')
         setNumbers(list)
-        setTotal((ord.total_amount ?? list.length * (ord.price_per_number ?? PRICE_FALLBACK)) || 0)
-        setPricePer(ord.price_per_number ?? PRICE_FALLBACK)
-        setProofUrl(pr?.file_url || null)
+        setTotal(ord.total_amount || list.length * (ord.price_per_number || PRICE_FALLBACK))
+        setPricePer(ord.price_per_number || PRICE_FALLBACK)
+        setProofUrl((pr as { file_url?: string } | null)?.file_url || null)
         setLoading(false)
         return
       }
 
-      // crear desde ?n=...
       const nParam = params.get('n') || ''
       const nums = nParam.split(',').map(s => Number(s)).filter(n => Number.isFinite(n))
       if (nums.length === 0 || nums.length > MAX_PER_ORDER) {
@@ -125,23 +83,20 @@ export default function CheckoutPage() {
       }
 
       const res = await fetch('/api/create-order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: prof.id, numbers: nums })
       })
-      const j = (await res.json()) as CreateOrderResp
+      const j = await res.json()
       if (!res.ok) { alert(j?.error || 'No se pudo crear la orden'); router.replace('/app'); return }
 
-      // setear estado local
-      setOrderId(j.orderId)
+      setOrderId(j.orderId as string)
       setOrderStatus('awaiting_proof')
-      setNumbers((j.numbers || []).slice().sort((a,b)=>a-b))
-      setTotal(j.total)
-      setPricePer(j.price || PRICE_FALLBACK)
+      setNumbers((j.numbers as number[]).slice().sort((a,b)=>a-b))
+      setTotal(j.total as number)
+      setPricePer((j.price as number) || PRICE_FALLBACK)
       setProofUrl(null)
       setLoading(false)
 
-      // evitar duplicados al refrescar
       router.replace(`/checkout?order=${j.orderId}`)
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -164,29 +119,21 @@ export default function CheckoutPage() {
     try {
       const ext = file.name.split('.').pop()?.toLowerCase() || 'dat'
       const path = `${orderId}/${Date.now()}.${ext}`
-
-      // subir a Storage (bucket proofs)
       const { error: upErr } = await supa.storage.from('proofs').upload(path, file, {
         upsert: true, contentType: file.type
       })
       if (upErr) throw new Error(upErr.message)
       const { data: pub } = supa.storage.from('proofs').getPublicUrl(path)
 
-      // registrar en BD y pasar a under_review
       const res = await fetch('/api/upload-proof', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: profile.id,
-          orderId,
-          filePath: path,
-          publicUrl: pub.publicUrl,
-          fileType: file.type,
-          sizeBytes: file.size
+          userId: profile.id, orderId, filePath: path,
+          publicUrl: pub.publicUrl, fileType: file.type, sizeBytes: file.size
         })
       })
-      const j: { ok?: boolean; error?: string } = await res.json()
-      if (!res.ok || !j.ok) throw new Error(j?.error || 'No se pudo registrar el comprobante')
+      const j = await res.json()
+      if (!res.ok) throw new Error(j?.error || 'No se pudo registrar el comprobante')
 
       setProofUrl(pub.publicUrl)
       setOrderStatus('under_review')
@@ -208,17 +155,20 @@ export default function CheckoutPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: profile.id, orderId })
       })
-      const j: { ok?: boolean; error?: string } = await res.json()
-      if (!res.ok || !j.ok) throw new Error(j?.error || 'No se pudo eliminar el comprobante')
-
+      const j = await res.json()
+      if (!res.ok && !j?.ok) throw new Error(j?.error || 'No se pudo eliminar el comprobante')
       setProofUrl(null)
-      setOrderStatus('awaiting_proof') // el endpoint deja la orden en awaiting_proof
+      setOrderStatus('awaiting_proof')
       alert('Comprobante eliminado. Podés subir uno nuevo.')
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Error al eliminar comprobante'
       alert(msg)
     }
   }
+
+  const canUpload = orderStatus === 'awaiting_proof' || orderStatus === 'rejected'
+  const showProofBlock = !!proofUrl
+  const isClosed = orderStatus === 'paid' || orderStatus === 'canceled'
 
   if (loading) {
     return (
@@ -227,10 +177,6 @@ export default function CheckoutPage() {
       </div>
     )
   }
-
-  const canUpload = orderStatus === 'awaiting_proof' || orderStatus === 'rejected'
-  const showProofBlock = !!proofUrl
-  const isClosed = orderStatus === 'paid' || orderStatus === 'canceled'
 
   return (
     <div className="max-w-2xl mx-auto bg-white border rounded-2xl p-6 shadow-sm space-y-6">
@@ -273,7 +219,6 @@ export default function CheckoutPage() {
         )}
       </section>
 
-      {/* Zona de comprobante */}
       {!showProofBlock && canUpload && !isClosed && (
         <section className="rounded-xl border p-4">
           <h3 className="font-semibold mb-2">Subir comprobante (JPG/PNG/PDF · máx. 10MB)</h3>
@@ -321,7 +266,6 @@ export default function CheckoutPage() {
             </p>
           )}
 
-          {/* Modal simple */}
           {confirmOpen && (
             <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
               <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
@@ -337,5 +281,17 @@ export default function CheckoutPage() {
         </section>
       )}
     </div>
+  )
+}
+
+export default function CheckoutPage() {
+  return (
+    <Suspense fallback={
+      <div className="max-w-2xl mx-auto bg-white border rounded-2xl p-6 shadow-sm">
+        Cargando checkout…
+      </div>
+    }>
+      <CheckoutPageInner />
+    </Suspense>
   )
 }

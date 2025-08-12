@@ -70,9 +70,10 @@ export default function AdminPage() {
       setOrders(j.orders)
       setLastUpdated(new Date())
       setLoading(false)
-    } catch (e: any) {
-      alert(e?.message || 'Error')
-    } finally {
+    } catch (e: unknown) {
+  const msg = e instanceof Error ? e.message : 'Error'
+  alert(msg)
+} finally {
       setRefreshing(false)
     }
   }
@@ -121,7 +122,11 @@ export default function AdminPage() {
            String(o.total_amount).includes(q)
   })
 
-  const act = async (path: string, orderId: string, payload: any = {}) => {
+  const act = async (
+  path: 'mark-paid' | 'reject' | 'cancel',
+  orderId: string,
+  payload: Record<string, unknown> = {}
+) =>  {
     if (!me) return
     const res = await fetch(`/api/admin/${path}`, {
       method: 'POST',

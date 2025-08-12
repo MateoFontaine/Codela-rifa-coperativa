@@ -4,12 +4,23 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabaseBrowser } from '@/lib/supabase'
 
+type OrderStatus =
+  | 'awaiting_proof'
+  | 'under_review'
+  | 'paid'
+  | 'rejected'
+  | 'canceled'
+  | 'pending'
+
 type Order = {
   id: string
-  status: 'awaiting_proof' | 'under_review' | 'paid' | 'rejected' | 'canceled' | 'pending'
+  status: OrderStatus
   total_amount: number
   created_at: string
 }
+
+type NumRow = { id: number; order_id: string }
+type ProofRow = { order_id: string; file_url: string | null }
 
 export default function OrderHistory({ userId }: { userId?: string | null }) {
   const router = useRouter()
@@ -34,15 +45,16 @@ export default function OrderHistory({ userId }: { userId?: string | null }) {
         .order('created_at', { ascending: false })
         .limit(5)
 
-      if (!ords?.length) {
+      const ordList: Order[] = (ords as Order[]) ?? []
+      if (ordList.length === 0) {
         setOrders([])
         setNumsByOrder({})
         setProofUrlByOrder({})
         setLoading(false)
         return
       }
-      setOrders(ords as Order[])
-      const ids = ords.map(o => o.id)
+      setOrders(ordList)
+      const ids = ordList.map(o => o.id)
 
       // Números de esas órdenes
       const { data: nums } = await supa
@@ -51,10 +63,9 @@ export default function OrderHistory({ userId }: { userId?: string | null }) {
         .in('order_id', ids)
 
       const mapNums: Record<string, number[]> = {}
-      ;(nums || []).forEach((r: any) => {
-        const k = r.order_id as string
-        mapNums[k] = mapNums[k] || []
-        mapNums[k].push(Number(r.id))
+      ;(((nums as NumRow[]) ?? [])).forEach((r) => {
+        const k = r.order_id
+        ;(mapNums[k] ||= []).push(Number(r.id))
       })
 
       // Comprobantes (si existen)
@@ -64,7 +75,9 @@ export default function OrderHistory({ userId }: { userId?: string | null }) {
         .in('order_id', ids)
 
       const mapProof: Record<string, string> = {}
-      ;(proofs || []).forEach((p: any) => { mapProof[p.order_id] = p.file_url })
+      ;(((proofs as ProofRow[]) ?? [])).forEach((p) => {
+        if (p.file_url) mapProof[p.order_id] = p.file_url
+      })
 
       setNumsByOrder(mapNums)
       setProofUrlByOrder(mapProof)
@@ -72,7 +85,7 @@ export default function OrderHistory({ userId }: { userId?: string | null }) {
     })()
   }, [userId, supa])
 
-  const badge = (s: Order['status']) => {
+  const badge = (s: OrderStatus) => {
     const base = 'px-2 py-1 rounded-lg text-xs border'
     switch (s) {
       case 'awaiting_proof': return <span className={`${base} bg-amber-100 border-amber-200`}>Esperando comprobante</span>
@@ -100,8 +113,9 @@ export default function OrderHistory({ userId }: { userId?: string | null }) {
       })
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'awaiting_proof' } : o))
       alert('Comprobante eliminado. Podés subir uno nuevo.')
-    } catch (e: any) {
-      alert(e?.message || 'Error al eliminar comprobante')
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Error al eliminar comprobante'
+      alert(msg)
     }
   }
 

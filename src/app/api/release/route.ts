@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 
 type Body = { userId: string; numbers: number[] }
+type RaffleRow = {
+  id: number
+  status: 'free' | 'held' | 'sold'
+  held_by: string | null
+  order_id: string | null
+}
 
 export async function POST(req: Request) {
   try {
@@ -19,27 +25,40 @@ export async function POST(req: Request) {
       .select('id,status,held_by,order_id')
       .in('id', ids)
 
-    if (rowsErr) return NextResponse.json({ error: rowsErr.message }, { status: 400 })
+    if (rowsErr) {
+      return NextResponse.json({ error: rowsErr.message }, { status: 400 })
+    }
+
+    const list = (rows as RaffleRow[]) ?? []
 
     // Se pueden liberar sólo los que están en HOLD por el usuario y no tienen order_id
-    const releasable = (rows || [])
+    const releasable = list
       .filter(r => r.status === 'held' && r.held_by === userId && !r.order_id)
       .map(r => Number(r.id))
 
     if (releasable.length) {
       const { error: upErr } = await admin
         .from('raffle_numbers')
-        .update({ status: 'free', held_by: null, hold_expires_at: null, updated_at: new Date().toISOString() })
+        .update({
+          status: 'free',
+          held_by: null,
+          hold_expires_at: null,
+          updated_at: new Date().toISOString(),
+        })
         .in('id', releasable)
-      if (upErr) return NextResponse.json({ error: upErr.message }, { status: 400 })
+
+      if (upErr) {
+        return NextResponse.json({ error: upErr.message }, { status: 400 })
+      }
     }
 
     // Devolvemos exactamente qué IDs se liberaron y cuáles quedaron sin tocar
     const released = releasable
-    const skipped  = ids.filter(id => !released.includes(id))
+    const skipped = ids.filter(id => !released.includes(id))
 
     return NextResponse.json({ released, skipped })
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message || 'Error servidor' }, { status: 500 })
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Error servidor'
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 }

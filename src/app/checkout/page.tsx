@@ -9,7 +9,33 @@ const MAX_PER_ORDER = 50
 
 type Bank = { alias: string; cvu: string; holder: string }
 type Support = { whatsapp: string }
-type OrderStatus = 'awaiting_proof' | 'under_review' | 'paid' | 'rejected' | 'canceled' | 'pending'
+
+type OrderStatus =
+  | 'awaiting_proof'
+  | 'under_review'
+  | 'paid'
+  | 'rejected'
+  | 'canceled'
+  | 'pending'
+
+type OrderRow = {
+  id: string
+  user_id: string
+  status: OrderStatus
+  total_amount: number | null
+  price_per_number: number | null
+}
+
+type NumRow = { id: number }
+type ProofRow = { file_url: string | null }
+
+type CreateOrderResp = {
+  orderId: string
+  total: number
+  price: number
+  numbers: number[]
+  error?: string
+}
 
 export default function CheckoutPage() {
   const supa = useMemo(() => supabaseBrowser(), [])
@@ -40,7 +66,11 @@ export default function CheckoutPage() {
     ;(async () => {
       const { data: u } = await supa.auth.getUser()
       if (!u.user) { router.replace('/auth/login'); return }
-      const { data: prof } = await supa.from('app_users').select('id,email').eq('auth_user_id', u.user.id).single()
+      const { data: prof } = await supa
+        .from('app_users')
+        .select('id,email')
+        .eq('auth_user_id', u.user.id)
+        .single()
       if (!prof) { alert('Perfil no encontrado'); router.replace('/'); return }
       setProfile({ id: prof.id, email: prof.email })
 
@@ -55,25 +85,29 @@ export default function CheckoutPage() {
       // ¿viene con order=...?
       const existingOrderId = params.get('order')
       if (existingOrderId) {
-        const { data: ord, error: ordErr } = await supa
+        const { data: ordRaw, error: ordErr } = await supa
           .from('orders')
           .select('id,user_id,status,total_amount,price_per_number')
           .eq('id', existingOrderId)
           .single()
+
+        const ord = ordRaw as OrderRow | null
         if (ordErr || !ord) { alert('Orden no encontrada'); router.replace('/app'); return }
         if (ord.user_id !== prof.id) { alert('No autorizado'); router.replace('/app'); return }
 
-        const [{ data: nums }, { data: pr }] = await Promise.all([
+        const [{ data: nums }, { data: prRaw }] = await Promise.all([
           supa.from('raffle_numbers').select('id').eq('order_id', ord.id),
           supa.from('payment_proofs').select('file_url').eq('order_id', ord.id).single(),
         ])
-        const list = (nums || []).map((r: any) => Number(r.id)).sort((a,b)=>a-b)
+
+        const list = ((nums as NumRow[]) || []).map(r => Number(r.id)).sort((a,b)=>a-b)
+        const pr = (prRaw as ProofRow | null) || null
 
         setOrderId(ord.id)
-        setOrderStatus((ord.status as OrderStatus) || 'awaiting_proof')
+        setOrderStatus(ord.status || 'awaiting_proof')
         setNumbers(list)
-        setTotal(ord.total_amount || list.length * (ord.price_per_number || PRICE_FALLBACK))
-        setPricePer(ord.price_per_number || PRICE_FALLBACK)
+        setTotal((ord.total_amount ?? list.length * (ord.price_per_number ?? PRICE_FALLBACK)) || 0)
+        setPricePer(ord.price_per_number ?? PRICE_FALLBACK)
         setProofUrl(pr?.file_url || null)
         setLoading(false)
         return
@@ -88,16 +122,17 @@ export default function CheckoutPage() {
       }
 
       const res = await fetch('/api/create-order', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: prof.id, numbers: nums })
       })
-      const j = await res.json()
+      const j = (await res.json()) as CreateOrderResp
       if (!res.ok) { alert(j?.error || 'No se pudo crear la orden'); router.replace('/app'); return }
 
       // setear estado local
       setOrderId(j.orderId)
       setOrderStatus('awaiting_proof')
-      setNumbers((j.numbers as number[]).slice().sort((a,b)=>a-b))
+      setNumbers((j.numbers || []).slice().sort((a,b)=>a-b))
       setTotal(j.total)
       setPricePer(j.price || PRICE_FALLBACK)
       setProofUrl(null)
@@ -136,7 +171,8 @@ export default function CheckoutPage() {
 
       // registrar en BD y pasar a under_review
       const res = await fetch('/api/upload-proof', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: profile.id,
           orderId,
@@ -146,14 +182,15 @@ export default function CheckoutPage() {
           sizeBytes: file.size
         })
       })
-      const j = await res.json()
-      if (!res.ok) throw new Error(j?.error || 'No se pudo registrar el comprobante')
+      const j: { ok?: boolean; error?: string } = await res.json()
+      if (!res.ok || !j.ok) throw new Error(j?.error || 'No se pudo registrar el comprobante')
 
       setProofUrl(pub.publicUrl)
       setOrderStatus('under_review')
       alert('¡Comprobante recibido! En 24 h se acreditarán tus números.')
-    } catch (e: any) {
-      alert(e?.message || 'Error al subir comprobante')
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Error al subir comprobante'
+      alert(msg)
     } finally {
       setUploading(false)
     }
@@ -168,14 +205,15 @@ export default function CheckoutPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: profile.id, orderId })
       })
-      const j = await res.json()
-      if (!res.ok && !j?.ok) throw new Error(j?.error || 'No se pudo eliminar el comprobante')
+      const j: { ok?: boolean; error?: string } = await res.json()
+      if (!res.ok || !j.ok) throw new Error(j?.error || 'No se pudo eliminar el comprobante')
 
       setProofUrl(null)
-      setOrderStatus('awaiting_proof') // asumimos que el endpoint deja la orden en awaiting_proof
+      setOrderStatus('awaiting_proof') // el endpoint deja la orden en awaiting_proof
       alert('Comprobante eliminado. Podés subir uno nuevo.')
-    } catch (e: any) {
-      alert(e?.message || 'Error al eliminar comprobante')
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Error al eliminar comprobante'
+      alert(msg)
     }
   }
 

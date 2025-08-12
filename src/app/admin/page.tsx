@@ -1,22 +1,8 @@
 'use client'
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
-/* esto es de prueba */
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabaseBrowser } from '@/lib/supabase'
-
-type Order = {
-  id: string
-  user_id: string
-  email: string
-  status: 'awaiting_proof' | 'under_review' | 'paid' | 'rejected' | 'canceled' | 'pending'
-  total_amount: number
-  price_per_number: number
-  created_at: string
-  numbers: number[]
-  proofUrl: string | null
-}
 
 type Status =
   | 'awaiting_proof'
@@ -25,6 +11,27 @@ type Status =
   | 'rejected'
   | 'canceled'
   | 'pending'
+
+type Order = {
+  id: string
+  user_id: string
+  email: string
+  status: Status
+  total_amount: number
+  price_per_number: number
+  created_at: string
+  numbers: number[]
+  proofUrl: string | null
+}
+
+type Counts = { free: number; held: number; sold: number }
+
+type AdminOverviewResponse = {
+  counts: Counts
+  orders: Order[]
+}
+
+type ActionResponse = { ok?: boolean; error?: string }
 
 const STATUS_LABEL: Record<Status, string> = {
   awaiting_proof: 'Esperando comprobante',
@@ -44,13 +51,12 @@ const STATUS_STYLE: Record<Status, string> = {
   pending: 'bg-zinc-50 text-zinc-700 border border-zinc-200',
 }
 
-
 export default function AdminPage() {
   const supa = useMemo(() => supabaseBrowser(), [])
   const router = useRouter()
 
   const [me, setMe] = useState<{ id: string; email: string } | null>(null)
-  const [counts, setCounts] = useState<{ free: number; held: number; sold: number } | null>(null)
+  const [counts, setCounts] = useState<Counts | null>(null)
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -66,16 +72,20 @@ export default function AdminPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId }),
       })
-      const j = await res.json()
-      if (!res.ok) throw new Error(j?.error || 'Error cargando admin')
-      setCounts(j.counts)
-      setOrders(j.orders)
+
+      const body = (await res.json()) as Partial<AdminOverviewResponse> & { error?: string }
+      if (!res.ok || !body.counts || !body.orders) {
+        throw new Error(body.error || 'Error cargando admin')
+      }
+
+      setCounts(body.counts)
+      setOrders(body.orders)
       setLastUpdated(new Date())
       setLoading(false)
     } catch (e: unknown) {
-  const msg = e instanceof Error ? e.message : 'Error'
-  alert(msg)
-} finally {
+      const msg = e instanceof Error ? e.message : 'Error'
+      alert(msg)
+    } finally {
       setRefreshing(false)
     }
   }
@@ -119,24 +129,26 @@ export default function AdminPage() {
   const filtered = orders.filter(o => {
     const q = filter.trim().toLowerCase()
     if (!q) return true
-    return o.id.toLowerCase().includes(q) ||
-           o.email.toLowerCase().includes(q) ||
-           String(o.total_amount).includes(q)
+    return (
+      o.id.toLowerCase().includes(q) ||
+      o.email.toLowerCase().includes(q) ||
+      String(o.total_amount).includes(q)
+    )
   })
 
   const act = async (
-  path: 'mark-paid' | 'reject' | 'cancel',
-  orderId: string,
-  payload: Record<string, unknown> = {}
-) =>  {
+    path: 'mark-paid' | 'reject' | 'cancel',
+    orderId: string,
+    payload: Record<string, unknown> = {}
+  ) => {
     if (!me) return
     const res = await fetch(`/api/admin/${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: me.id, orderId, ...payload })
+      body: JSON.stringify({ userId: me.id, orderId, ...payload }),
     })
-    const j = await res.json()
-    if (!res.ok) { alert(j?.error || 'Error'); return }
+    const j = (await res.json()) as ActionResponse
+    if (!res.ok || j.error) { alert(j.error || 'Error'); return }
     // refresco suave inmediato
     loadOverview(me.id, { silent: true })
   }
@@ -216,29 +228,50 @@ export default function AdminPage() {
               {filtered.map(o => (
                 <tr key={o.id} className="border-t">
                   <td className="p-2">
-                    {o.id.slice(0,8)}…
-                    <div className="text-xs text-gray-500">{new Date(o.created_at).toLocaleString('es-AR')}</div>
+                    {o.id.slice(0, 8)}…
+                    <div className="text-xs text-gray-500">
+                      {new Date(o.created_at).toLocaleString('es-AR')}
+                    </div>
                   </td>
                   <td className="p-2">{o.email}</td>
                   <td className="p-2">{o.numbers.length}</td>
                   <td className="p-2">${o.total_amount?.toLocaleString('es-AR')}</td>
                   <td className="p-2">
-  <span className={`px-2 py-1 rounded-lg text-xs ${STATUS_STYLE[o.status]}`}>
-    {STATUS_LABEL[o.status]}
-  </span>
-</td>
+                    <span className={`px-2 py-1 rounded-lg text-xs ${STATUS_STYLE[o.status]}`}>
+                      {STATUS_LABEL[o.status]}
+                    </span>
+                  </td>
                   <td className="p-2">
                     {o.proofUrl
-                      ? <a href={o.proofUrl} target="_blank" className="underline">Ver</a>
+                      ? (
+                        <a href={o.proofUrl} target="_blank" rel="noreferrer" className="underline">
+                          Ver
+                        </a>
+                        )
                       : <span className="text-gray-400">—</span>}
                   </td>
                   <td className="p-2">
                     <div className="flex flex-wrap gap-2">
                       {o.status !== 'paid' && o.status !== 'canceled' && (
                         <>
-                          <button onClick={() => act('mark-paid', o.id)} className="px-2 py-1 rounded-lg bg-emerald-600 text-white">Acreditar</button>
-                          <button onClick={() => act('reject', o.id)} className="px-2 py-1 rounded-lg bg-amber-500 text-white">Rechazar</button>
-                          <button onClick={() => act('cancel', o.id)} className="px-2 py-1 rounded-lg bg-rose-600 text-white">Cancelar</button>
+                          <button
+                            onClick={() => act('mark-paid', o.id)}
+                            className="px-2 py-1 rounded-lg bg-emerald-600 text-white"
+                          >
+                            Acreditar
+                          </button>
+                          <button
+                            onClick={() => act('reject', o.id)}
+                            className="px-2 py-1 rounded-lg bg-amber-500 text-white"
+                          >
+                            Rechazar
+                          </button>
+                          <button
+                            onClick={() => act('cancel', o.id)}
+                            className="px-2 py-1 rounded-lg bg-rose-600 text-white"
+                          >
+                            Cancelar
+                          </button>
                         </>
                       )}
                     </div>
@@ -246,7 +279,11 @@ export default function AdminPage() {
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td className="p-4 text-center text-gray-500" colSpan={7}>No hay coincidencias</td></tr>
+                <tr>
+                  <td className="p-4 text-center text-gray-500" colSpan={7}>
+                    No hay coincidencias
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>

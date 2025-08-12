@@ -1,5 +1,8 @@
 // src/app/app/page.tsx
 'use client'
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'

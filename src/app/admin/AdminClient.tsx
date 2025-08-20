@@ -265,13 +265,34 @@ export default function AdminPage() {
            String(o.total_amount).includes(q)
   })
 
-  const filteredUsers = users.filter(u => {
-    const q = userFilter.trim().toLowerCase()
-    if (!q) return true
-    return (u.nombre || '').toLowerCase().includes(q) ||
-           u.email.toLowerCase().includes(q) ||
-           String(u.dni ?? '').toLowerCase().includes(q)
-  })
+const filteredUsers = users.filter(u => {
+  const qRaw = userFilter.trim().toLowerCase()
+  if (!qRaw) return true
+
+  // Coincidencia por texto (nombre / email / DNI)
+  const textMatch =
+    (u.nombre || '').toLowerCase().includes(qRaw) ||
+    u.email.toLowerCase().includes(qRaw) ||
+    String(u.dni ?? '').toLowerCase().includes(qRaw)
+
+  // Extraer tokens numéricos del query (soporta "123", "12 34", "12,34", etc.)
+  const numTokens = qRaw
+    .split(/[\s,;]+/)
+    .map(t => t.trim())
+    .filter(Boolean)
+    .filter(t => /^\d+$/.test(t))
+
+  if (numTokens.length === 0) {
+    return textMatch
+  }
+
+  // Si hay números en el query: alcanza con que alguno esté entre los números del usuario
+  const nums = numTokens.map(n => Number(n))
+  const numberMatch = nums.some(n => u.numeros.includes(n))
+
+  return textMatch || numberMatch
+})
+
 
   const act = async (
     path: 'mark-paid' | 'reject' | 'cancel',
@@ -437,7 +458,7 @@ export default function AdminPage() {
           <input
             value={userFilter}
             onChange={e => setUserFilter(e.target.value)}
-            placeholder="Buscar por nombre, email o DNI..."
+            placeholder="Buscar por nombre, email, DNI o número..."
             className="flex-1 border rounded-xl px-3 py-2"
           />
         </div>

@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabaseBrowser } from '@/lib/supabase'
+import { Phone, MessageCircle } from "lucide-react";
 
 type Status = 'awaiting_proof' | 'under_review' | 'paid' | 'rejected' | 'canceled' | 'pending'
 
@@ -17,6 +18,8 @@ type Order = {
   created_at: string
   numbers: number[]
   proofUrl: string | null
+  // 👇 agregado para contacto
+  phone?: string | null
 }
 
 type Counts = { free: number; held: number; sold: number }
@@ -40,7 +43,7 @@ type UserRow = {
 
 // ---- Detalle modal
 type UserDetailResponse = {
-  user: { id: string; nombre: string | null; email: string; dni: string | number | null }
+  user: { id: string; nombre: string | null; email: string; dni: string | number | null; phone?: string | null } // 👈 phone agregado
   numbers: number[]
   pendingCount: number
   orders: Array<{
@@ -54,7 +57,7 @@ type UserDetailResponse = {
 }
 
 const STATUS_LABEL: Record<Status, string> = {
-  awaiting_proof: 'Esperando comprobante',
+  awaiting_proof: 'sin comprobante',
   under_review: 'En revisión',
   paid: 'Acreditada',
   rejected: 'Rechazada',
@@ -63,7 +66,7 @@ const STATUS_LABEL: Record<Status, string> = {
 }
 
 const STATUS_STYLE: Record<Status, string> = {
-  awaiting_proof: 'bg-amber-50 text-amber-800 border border-amber-200',
+  awaiting_proof: 'bg-amber-50 text-amber-800 border border-amber-200 text-center',
   under_review: 'bg-sky-50 text-sky-800 border border-sky-200',
   paid: 'bg-emerald-50 text-emerald-800 border border-emerald-200',
   rejected: 'bg-rose-50 text-rose-800 border border-rose-200',
@@ -96,6 +99,35 @@ export default function AdminPage() {
   const numbersSecRef = useRef<HTMLDivElement | null>(null)
   const ordersSecRef = useRef<HTMLDivElement | null>(null)
 
+  // === Helper: normalizar teléfono a link de WhatsApp (AR-friendly, pero sirve genérico si ya viene con país)
+  function waHrefFrom(raw?: string | null): string | null {
+    if (!raw) return null
+    let num = raw.replace(/\D/g, '')
+    // Normalización común para Argentina:
+    // wa.me requiere: 549 + (área sin 0) + (línea sin 15)
+    if (num.startsWith('549')) num = num.slice(3)
+    else if (num.startsWith('54')) num = num.slice(2)
+    num = num.replace(/^0/, '')
+    num = num.replace(/^15/, '')
+    return `https://wa.me/549${num}`
+  }
+
+  // === Traer phones desde app_users y “pegar” a las órdenes (sin tocar tu backend)
+  async function enrichOrdersWithPhones(ordersIn: Order[]): Promise<Order[]> {
+    const ids = Array.from(new Set(ordersIn.map(o => o.user_id))).filter(Boolean)
+    if (ids.length === 0) return ordersIn
+
+    const { data: usersData, error } = await supa
+      .from('app_users')
+      .select('id, phone')
+      .in('id', ids)
+
+    if (error || !usersData) return ordersIn
+
+    const byId = new Map(usersData.map(u => [u.id, u.phone ?? null]))
+    return ordersIn.map(o => ({ ...o, phone: byId.get(o.user_id) ?? null }))
+  }
+
   const loadOverview = async (userId: string, opts?: { silent?: boolean }) => {
     try {
       if (!opts?.silent) setRefreshing(true)
@@ -111,7 +143,11 @@ export default function AdminPage() {
       }
 
       setCounts(body.counts)
-      setOrders(body.orders)
+
+      // 👇 Enriquecemos las órdenes con el teléfono (frontend-only)
+      const enriched = await enrichOrdersWithPhones(body.orders as Order[])
+      setOrders(enriched)
+
       setLastUpdated(new Date())
       setLoading(false)
     } catch (e: unknown) {
@@ -152,8 +188,22 @@ export default function AdminPage() {
       if (!res.ok || (body as unknown as { error?: string }).error) {
         throw new Error((body as unknown as { error?: string }).error || 'No se pudo cargar el detalle')
       }
-      setDetail(body)
+
+      // 👇 Traigo el phone de app_users y lo agrego al detalle (frontend-only)
+      const { data: urow } = await supa
+        .from('app_users')
+        .select('phone')
+        .eq('id', targetId)
+        .single()
+
+      const bodyWithPhone: UserDetailResponse = {
+        ...body,
+        user: { ...body.user, phone: urow?.phone ?? null },
+      }
+
+      setDetail(bodyWithPhone)
       setDetailLoading(false)
+
       // pequeño scroll a la sección pedida
       setTimeout(() => {
         if (focusRef.current === 'numbers') numbersSecRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -165,6 +215,12 @@ export default function AdminPage() {
     }
   }
 
+  // Hago que "Actualizado hace ..." cuente en vivo (sin cambiar tu API)
+  const [tick, setTick] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 1000)
+    return () => clearInterval(id)
+  }, [])
   const sinceText = (() => {
     if (!lastUpdated) return '—'
     const secs = Math.max(0, Math.floor((Date.now() - lastUpdated.getTime()) / 1000))
@@ -294,6 +350,7 @@ export default function AdminPage() {
               <tr className="text-left">
                 <th className="p-2">Orden</th>
                 <th className="p-2">Usuario</th>
+                <th className="p-2">Contacto</th>
                 <th className="p-2">Números</th>
                 <th className="p-2">Total</th>
                 <th className="p-2">Estado</th>
@@ -302,38 +359,68 @@ export default function AdminPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredOrders.map(o => (
-                <tr key={o.id} className="border-t">
-                  <td className="p-2">
-                    {o.id.slice(0, 8)}…
-                    <div className="text-xs text-gray-500">{new Date(o.created_at).toLocaleString('es-AR')}</div>
-                  </td>
-                  <td className="p-2">{o.email}</td>
-                  <td className="p-2">{o.numbers.length}</td>
-                  <td className="p-2">${o.total_amount?.toLocaleString('es-AR')}</td>
-                  <td className="p-2">
-                    <span className={`px-2 py-1 rounded-lg text-xs ${STATUS_STYLE[o.status]}`}>
-                      {STATUS_LABEL[o.status]}
-                    </span>
-                  </td>
-                  <td className="p-2">
-                    {o.proofUrl
-                      ? <a href={o.proofUrl} target="_blank" rel="noreferrer" className="underline">Ver</a>
-                      : <span className="text-gray-400">—</span>}
-                  </td>
-                  <td className="p-2">
-                    <div className="flex flex-wrap gap-2">
-                      {o.status !== 'paid' && o.status !== 'canceled' && (
-                        <>
-                          <button onClick={() => act('mark-paid', o.id)} className="px-2 py-1 rounded-lg bg-emerald-600 text-white">Acreditar</button>
-                          <button onClick={() => act('reject', o.id)} className="px-2 py-1 rounded-lg bg-amber-500 text-white">Rechazar</button>
-                          <button onClick={() => act('cancel', o.id)} className="px-2 py-1 rounded-lg bg-rose-600 text-white">Cancelar</button>
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {filteredOrders.map(o => {
+                const wa = waHrefFrom(o.phone)
+                const hasPhone = Boolean(o.phone && wa)
+                return (
+                  <tr key={o.id} className="border-t">
+                    <td className="p-2">
+                      {o.id.slice(0, 8)}…
+                      <div className="text-xs text-gray-500">{new Date(o.created_at).toLocaleString('es-AR')}</div>
+                    </td>
+                    <td className="p-2">{o.email}</td>
+
+                    {/* Contacto */}
+                    <td className="p-2">
+                      <div className="flex gap-2">
+                        {/* WhatsApp */}
+                        <a
+                          href={hasPhone ? wa! : '#'}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={`text-green-600 hover:text-green-700 ${!hasPhone ? 'pointer-events-none opacity-40' : ''}`}
+                          title={hasPhone ? `WhatsApp: ${o.phone}` : 'Sin teléfono'}
+                        >
+                          <MessageCircle size={20} />
+                        </a>
+
+                        {/* Teléfono */}
+                        <a
+                          href={o.phone ? `tel:${o.phone}` : '#'}
+                          className={`text-blue-600 hover:text-blue-700 ${!o.phone ? 'pointer-events-none opacity-40' : ''}`}
+                          title={o.phone ? `Llamar: ${o.phone}` : 'Sin teléfono'}
+                        >
+                          <Phone size={20} />
+                        </a>
+                      </div>
+                    </td>
+
+                    <td className="p-2">{o.numbers.length}</td>
+                    <td className="p-2">${o.total_amount?.toLocaleString('es-AR')}</td>
+                    <td className="p-2">
+                      <span className={`px-2 py-1 rounded-lg text-xs ${STATUS_STYLE[o.status]}`}>
+                        {STATUS_LABEL[o.status]}
+                      </span>
+                    </td>
+                    <td className="p-2">
+                      {o.proofUrl
+                        ? <a href={o.proofUrl} target="_blank" rel="noreferrer" className="underline">Ver</a>
+                        : <span className="text-gray-400">—</span>}
+                    </td>
+                    <td className="p-2">
+                      <div className="flex flex-wrap gap-2">
+                        {o.status !== 'paid' && o.status !== 'canceled' && (
+                          <>
+                            <button onClick={() => act('mark-paid', o.id)} className="px-2 py-1 rounded-lg bg-emerald-600 text-white">Acreditar</button>
+                            <button onClick={() => act('reject', o.id)} className="px-2 py-1 rounded-lg bg-amber-500 text-white">Rechazar</button>
+                            <button onClick={() => act('cancel', o.id)} className="px-2 py-1 rounded-lg bg-rose-600 text-white">Cancelar</button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
               {filteredOrders.length === 0 && (
                 <tr><td className="p-4 text-center text-gray-500" colSpan={7}>No hay coincidencias</td></tr>
               )}
@@ -369,7 +456,7 @@ export default function AdminPage() {
             <tbody>
               {filteredUsers.map(u => (
                 <tr key={u.id} className="border-t align-middle">
-                  <td className="p-2">{u.nombre || '—'}</td>
+                  <td className="p-2">{u.nombre ?? u.email.split('@')[0]}</td>
                   <td className="p-2">{u.email}</td>
                   <td className="p-2">
                     <div className="flex items-center gap-2">
@@ -416,14 +503,45 @@ export default function AdminPage() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-lg font-semibold">Detalle de usuario</h3>
+
                 {detail && (
-                  <p className="text-sm text-gray-600">
-                    {detail.user.nombre ? `${detail.user.nombre} · ` : ''}
-                    {detail.user.email}
-                    {detail.user.dni ? ` · DNI: ${detail.user.dni}` : ''}
-                  </p>
+                  <>
+                    <p className="text-sm text-gray-600">
+                      {detail.user.nombre ? `${detail.user.nombre} · ` : ''}
+                      {detail.user.email}
+                      {detail.user.dni ? ` · DNI: ${detail.user.dni}` : ''}
+                    </p>
+
+                    {/* Contacto en header del modal */}
+                    <div className="mt-1 flex items-center gap-3">
+                      {detail.user.phone ? (
+                        <>
+                          <a
+                            href={waHrefFrom(detail.user.phone) ?? '#'}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-green-600 hover:text-green-700"
+                            title={`WhatsApp: ${detail.user.phone}`}
+                          >
+                            <MessageCircle size={18} />
+                          </a>
+                          <a
+                            href={`tel:${detail.user.phone}`}
+                            className="text-blue-600 hover:text-blue-700"
+                            title={`Llamar: ${detail.user.phone}`}
+                          >
+                            <Phone size={18} />
+                          </a>
+                          <span className="text-sm text-gray-700">{detail.user.phone}</span>
+                        </>
+                      ) : (
+                        <span className="text-sm text-gray-400">Sin teléfono</span>
+                      )}
+                    </div>
+                  </>
                 )}
               </div>
+
               <button onClick={() => setDetailOpen(false)} className="px-3 py-2 rounded-xl border">Cerrar</button>
             </div>
 

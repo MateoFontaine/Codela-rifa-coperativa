@@ -32,7 +32,7 @@ export default function SearchNumber({ total, pageSize, onGo }: Props) {
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 120)}
         onChange={(e) => setVal(e.target.value.replace(/\D/g, ''))}
-        placeholder="Ir al número…"
+        placeholder="Elija numeros del 0 del al 100000..."
         className="w-full border rounded-xl p-3 text-base"
       />
       {val && open && parsed && (

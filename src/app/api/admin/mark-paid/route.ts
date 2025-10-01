@@ -1,49 +1,56 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-
-type Body = { userId: string; orderId: string }
+import { updateActivePurchasesCount } from '@/lib/purchase-limits'
 
 export async function POST(req: Request) {
   try {
-    const { userId, orderId } = (await req.json()) as Body
+    const { userId, orderId } = await req.json()
     if (!userId || !orderId) {
       return NextResponse.json({ error: 'Faltan datos' }, { status: 400 })
     }
 
     const admin = supabaseAdmin()
 
-    // check admin
-    const { data: au } = await admin
+    // Verificar que el admin existe
+    const { data: adminUser } = await admin
       .from('app_users')
       .select('is_admin')
       .eq('id', userId)
       .single()
-    if (!au?.is_admin) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+    if (!adminUser?.is_admin) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
     }
 
-    // set paid
-    const { error: upErr } = await admin
+    // Obtener la orden y su dueño
+    const { data: order } = await admin
+      .from('orders')
+      .select('id, user_id, status')
+      .eq('id', orderId)
+      .single()
+
+    if (!order) {
+      return NextResponse.json({ error: 'Orden no encontrada' }, { status: 404 })
+    }
+
+    // Actualizar orden a 'paid'
+    const { error: updateErr } = await admin
       .from('orders')
       .update({ status: 'paid', updated_at: new Date().toISOString() })
       .eq('id', orderId)
-    if (upErr) {
-      return NextResponse.json({ error: upErr.message }, { status: 400 })
+
+    if (updateErr) {
+      return NextResponse.json({ error: updateErr.message }, { status: 400 })
     }
 
-    // marcar números como sold
-    const { error: numsErr } = await admin
+    // Marcar números como 'sold'
+    await admin
       .from('raffle_numbers')
-      .update({
-        status: 'sold',
-        held_by: null,
-        hold_expires_at: null,
-        updated_at: new Date().toISOString(),
-      })
+      .update({ status: 'sold', updated_at: new Date().toISOString() })
       .eq('order_id', orderId)
-    if (numsErr) {
-      return NextResponse.json({ error: numsErr.message }, { status: 400 })
-    }
+
+    // Actualizar contador de compras activas del usuario
+    await updateActivePurchasesCount(order.user_id)
 
     return NextResponse.json({ ok: true })
   } catch (e: unknown) {

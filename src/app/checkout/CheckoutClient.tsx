@@ -1,296 +1,744 @@
+// src/app/app/page.tsx
 'use client'
-import { Suspense } from 'react'
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useMemo, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { supabaseBrowser } from '@/lib/supabase'
+import SearchNumber from '@/components/SearchNumber'
+import OrderHistory from '@/components/OrderHistory'
+import MyNumbers from '@/components/MyNumbers'
 
+type RaffleNumber = {
+  id: number
+  status: 'free' | 'held' | 'sold'
+  held_by: string | null
+  order_id: string | null
+}
 
+type PurchaseLimitInfo = {
+  canPurchase: boolean
+  activePurchases: number
+  maxPurchases: number
+  nextAvailableAt?: string
+  hoursRemaining?: number
+  reason?: string
+}
 
-const PRICE_FALLBACK = 1000
+const PAGE_SIZE = 100
+const TOTAL_NUMBERS = 100000
 const MAX_PER_ORDER = 50
 
-type Bank = { alias: string; cvu: string; holder: string }
-type Support = { whatsapp: string }
-type OrderStatus = 'awaiting_proof' | 'under_review' | 'paid' | 'rejected' | 'canceled' | 'pending'
-
-function CheckoutPageInner() {
+export default function UserRaffle() {
   const supa = useMemo(() => supabaseBrowser(), [])
   const router = useRouter()
-  const params = useSearchParams()
 
   const [profile, setProfile] = useState<{ id: string; email: string } | null>(null)
-  const [orderId, setOrderId] = useState<string | null>(null)
-  const [orderStatus, setOrderStatus] = useState<OrderStatus>('awaiting_proof')
-  const [numbers, setNumbers] = useState<number[]>([])
-  const [total, setTotal] = useState<number>(0)
-  const [pricePer, setPricePer] = useState<number>(PRICE_FALLBACK)
-  const [bank, setBank] = useState<Bank | null>(null)
-  const [support, setSupport] = useState<Support | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [limitInfo, setLimitInfo] = useState<PurchaseLimitInfo | null>(null)
 
-  const [proofUrl, setProofUrl] = useState<string | null>(null)
-  const [uploading, setUploading] = useState(false)
-  const [file, setFile] = useState<File | null>(null)
-  const [confirmOpen, setConfirmOpen] = useState(false)
+  // grilla
+  const [page, setPage] = useState(1)
+  const [rows, setRows] = useState<RaffleNumber[]>([])
+  const [loading, setLoading] = useState(false)
 
+  // carrito
+  const [cart, setCart] = useState<number[]>([])
+  const [expiresAt, setExpiresAt] = useState<string | null>(null)
+  const [countdown, setCountdown] = useState('')
+
+  // búsqueda
+  const [searchTarget, setSearchTarget] = useState<number | null>(null)
+
+  // tabs para mobile
+  const [activeTab, setActiveTab] = useState<'comprar' | 'cuenta'>('comprar')
+
+  // Variable para saber si está bloqueado
+  const isBlocked = limitInfo && !limitInfo.canPurchase
+
+  // Cargar límites de compra
+  const loadPurchaseLimits = async (userId: string) => {
+    try {
+      const res = await fetch('/api/purchase-limits', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      })
+      const data = await res.json()
+      setLimitInfo(data)
+    } catch (error) {
+      console.error('Error cargando límites:', error)
+    }
+  }
+
+  // Auth + perfil (bloquea admins en /app)
   useEffect(() => {
     ;(async () => {
       const { data: u } = await supa.auth.getUser()
-      if (!u.user) { router.replace('/auth/login'); return }
-      const { data: prof } = await supa.from('app_users').select('id,email').eq('auth_user_id', u.user.id).single()
-      if (!prof) { alert('Perfil no encontrado'); router.replace('/'); return }
-      setProfile({ id: prof.id, email: prof.email })
-
-      const [{ data: bankRow }, { data: supRow }] = await Promise.all([
-        supa.from('settings').select('value').eq('key', 'bank').single(),
-        supa.from('settings').select('value').eq('key', 'support').single(),
-      ])
-      setBank((bankRow?.value as Bank) || null)
-      setSupport((supRow?.value as Support) || null)
-
-      const existingOrderId = params.get('order')
-      if (existingOrderId) {
-        const { data: ord, error: ordErr } = await supa
-          .from('orders')
-          .select('id,user_id,status,total_amount,price_per_number')
-          .eq('id', existingOrderId)
-          .single()
-        if (ordErr || !ord) { alert('Orden no encontrada'); router.replace('/app'); return }
-        if (ord.user_id !== prof.id) { alert('No autorizado'); router.replace('/app'); return }
-
-        const [{ data: nums }, { data: pr }] = await Promise.all([
-          supa.from('raffle_numbers').select('id').eq('order_id', ord.id),
-          supa.from('payment_proofs').select('file_url').eq('order_id', ord.id).single(),
-        ])
-        const list = (nums || []).map(r => Number((r as { id: number }).id)).sort((a,b)=>a-b)
-
-        setOrderId(ord.id)
-        setOrderStatus((ord.status as OrderStatus) || 'awaiting_proof')
-        setNumbers(list)
-        setTotal(ord.total_amount || list.length * (ord.price_per_number || PRICE_FALLBACK))
-        setPricePer(ord.price_per_number || PRICE_FALLBACK)
-        setProofUrl((pr as { file_url?: string } | null)?.file_url || null)
-        setLoading(false)
+      if (!u.user) {
+        router.replace('/auth/login')
         return
       }
 
-      const nParam = params.get('n') || ''
-      const nums = nParam.split(',').map(s => Number(s)).filter(n => Number.isFinite(n))
-      if (nums.length === 0 || nums.length > MAX_PER_ORDER) {
-        alert(`No hay números válidos en el carrito (máximo ${MAX_PER_ORDER}).`)
-        router.replace('/app'); return
+      const { data: prof } = await supa
+        .from('app_users')
+        .select('id,email,is_admin')
+        .eq('auth_user_id', u.user.id)
+        .single()
+
+      if (!prof) {
+        alert('No se encontró el perfil del usuario.')
+        return
       }
 
-      const res = await fetch('/api/create-order', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: prof.id, numbers: nums })
-      })
-      const j = await res.json()
-      if (!res.ok) { alert(j?.error || 'No se pudo crear la orden'); router.replace('/app'); return }
+      if (prof.is_admin) {
+        router.replace('/admin')
+        return
+      }
 
-      setOrderId(j.orderId as string)
-      setOrderStatus('awaiting_proof')
-      setNumbers((j.numbers as number[]).slice().sort((a,b)=>a-b))
-      setTotal(j.total as number)
-      setPricePer((j.price as number) || PRICE_FALLBACK)
-      setProofUrl(null)
-      setLoading(false)
-
-      router.replace(`/checkout?order=${j.orderId}`)
+      setProfile({ id: prof.id, email: prof.email })
+      await loadPurchaseLimits(prof.id)
     })()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [supa, router])
 
-  const totalFmt = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(total || 0)
+  // Cargar página (NO toca el carrito)
+  useEffect(() => {
+    ;(async () => {
+      setLoading(true)
+      const from = (page - 1) * PAGE_SIZE
+      const to = from + PAGE_SIZE - 1
+      const { data, error } = await supa
+        .from('raffle_numbers')
+        .select('id,status,held_by,order_id')
+        .order('id', { ascending: true })
+        .range(from, to)
 
-  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0] || null
-    if (!f) { setFile(null); return }
-    const okType = ['image/jpeg','image/png','application/pdf'].includes(f.type)
-    if (!okType) { alert('Formato inválido (JPG/PNG/PDF)'); e.target.value = ''; return }
-    if (f.size > 10 * 1024 * 1024) { alert('Archivo > 10MB'); e.target.value = ''; return }
-    setFile(f)
-  }
+      if (!error && data) setRows(data as RaffleNumber[])
+      setLoading(false)
+    })()
+  }, [page, supa])
 
-  const uploadProof = async () => {
-    if (!profile || !orderId || !file) return
-    setUploading(true)
-    try {
-      const ext = file.name.split('.').pop()?.toLowerCase() || 'dat'
-      const path = `${orderId}/${Date.now()}.${ext}`
-      const { error: upErr } = await supa.storage.from('proofs').upload(path, file, {
-        upsert: true, contentType: file.type
-      })
-      if (upErr) throw new Error(upErr.message)
-      const { data: pub } = supa.storage.from('proofs').getPublicUrl(path)
-
-      const res = await fetch('/api/upload-proof', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: profile.id, orderId, filePath: path,
-          publicUrl: pub.publicUrl, fileType: file.type, sizeBytes: file.size
-        })
-      })
-      const j = await res.json()
-      if (!res.ok) throw new Error(j?.error || 'No se pudo registrar el comprobante')
-
-      setProofUrl(pub.publicUrl)
-      setOrderStatus('under_review')
-      alert('¡Comprobante recibido! En 24 h se acreditarán tus números.')
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Error al subir comprobante'
-      alert(msg)
-    } finally {
-      setUploading(false)
+  // Scroll al número buscado cuando termine de cargar
+  useEffect(() => {
+    if (!loading && searchTarget !== null) {
+      setTimeout(() => {
+        const el = document.getElementById(`num-${searchTarget}`)
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          el.classList.add('ring-2', 'ring-blue-400')
+          setTimeout(() => el.classList.remove('ring-2', 'ring-blue-400'), 2000)
+        }
+        setSearchTarget(null)
+      }, 100)
     }
-  }
+  }, [loading, searchTarget])
 
-  const deleteProof = async () => {
-    if (!profile || !orderId) return
-    setConfirmOpen(false)
-    try {
-      const res = await fetch('/api/delete-proof', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: profile.id, orderId })
-      })
-      const j = await res.json()
-      if (!res.ok && !j?.ok) throw new Error(j?.error || 'No se pudo eliminar el comprobante')
-      setProofUrl(null)
-      setOrderStatus('awaiting_proof')
-      alert('Comprobante eliminado. Podés subir uno nuevo.')
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Error al eliminar comprobante'
-      alert(msg)
+  // Countdown carrito
+  useEffect(() => {
+    if (!expiresAt) {
+      setCountdown('')
+      return
     }
-  }
+    const iv = setInterval(() => {
+      const ms = new Date(expiresAt).getTime() - Date.now()
+      if (ms <= 0) {
+        setCountdown('00:00')
+        clearInterval(iv)
+        return
+      }
+      const m = Math.floor(ms / 60000)
+      const s = Math.floor((ms % 60000) / 1000)
+      setCountdown(`${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`)
+    }, 500)
+    return () => clearInterval(iv)
+  }, [expiresAt])
 
-  const canUpload = orderStatus === 'awaiting_proof' || orderStatus === 'rejected'
-  const showProofBlock = !!proofUrl
-  const isClosed = orderStatus === 'paid' || orderStatus === 'canceled'
+  // Helpers
+  const maxPage = Math.ceil(TOTAL_NUMBERS / PAGE_SIZE)
+  const goTo = (p: number) => setPage(Math.min(Math.max(1, p), maxPage))
+  const colorFor = (r: RaffleNumber) =>
+    r.status === 'free'
+      ? 'bg-emerald-100 hover:bg-emerald-200'
+      : r.status === 'held'
+      ? 'bg-amber-100'
+      : 'bg-rose-100'
 
-  if (loading) {
-    return (
-      <div className="max-w-2xl mx-auto bg-white border rounded-2xl p-6 shadow-sm">
-        <p>Cargando checkout…</p>
-      </div>
+  // ================== Acciones ==================
+
+  const pickOne = async (num: number) => {
+    if (!profile) return
+    if (isBlocked) {
+      alert(limitInfo?.reason || 'No podés hacer más compras en este momento')
+      return
+    }
+    if (cart.length >= MAX_PER_ORDER) {
+      alert(`Máximo ${MAX_PER_ORDER} por compra`)
+      return
+    }
+    const r = rows.find((x) => x.id === num)
+    if (!r || r.status !== 'free' || r.order_id) return
+
+    setCart((prev) => [...prev, num])
+    setRows((prev) =>
+      prev.map((x) =>
+        x.id === num ? { ...x, status: 'held', held_by: profile.id } : x
+      )
     )
+    const optimisticExpire = new Date(Date.now() + 10 * 60_000).toISOString()
+    if (!expiresAt) setExpiresAt(optimisticExpire)
+
+    const res = await fetch('/api/hold', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: profile.id, numbers: [num] }),
+    })
+    const j = await res.json()
+    const ok = j?.results?.[0]?.ok
+    if (ok) setExpiresAt(j.expiresAt || optimisticExpire)
+    else {
+      setRows((prev) =>
+        prev.map((x) =>
+          x.id === num ? { ...x, status: 'free', held_by: null } : x
+        )
+      )
+      setCart((prev) => {
+        const next = prev.filter((n) => n !== num)
+        if (next.length === 0) setExpiresAt(null)
+        return next
+      })
+      alert('Ese número ya no está disponible')
+    }
+  }
+
+  const releaseOne = async (num: number) => {
+    if (!profile) return
+    const row = rows.find((x) => x.id === num)
+    if (row?.order_id) return
+
+    const remainingAfter = cart.filter((n) => n !== num).length
+    setCart((prev) => prev.filter((n) => n !== num))
+    setRows((prev) =>
+      prev.map((x) =>
+        x.id === num ? { ...x, status: 'free', held_by: null } : x
+      )
+    )
+    if (remainingAfter === 0) setExpiresAt(null)
+
+    const res = await fetch('/api/release', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: profile.id, numbers: [num] }),
+    })
+    const j = await res.json()
+    const released: number[] = j?.released || []
+
+    if (!res.ok || !released.includes(num)) {
+      setRows((prev) =>
+        prev.map((x) =>
+          x.id === num ? { ...x, status: 'held', held_by: profile!.id } : x
+        )
+      )
+      setCart((prev) => [...prev, num])
+      if (!expiresAt)
+        setExpiresAt(new Date(Date.now() + 10 * 60_000).toISOString())
+      alert(j?.error || 'No se pudo liberar')
+    }
+  }
+
+  const releaseMany = async (nums: number[]) => {
+    if (!profile || nums.length === 0) return
+
+    const res = await fetch('/api/release', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: profile.id, numbers: nums }),
+    })
+    const j = await res.json()
+    if (!res.ok) {
+      alert(j?.error || 'No se pudo liberar')
+      return
+    }
+
+    const released: number[] = j.released || []
+
+    if (released.length) {
+      setRows((prev) =>
+        prev.map((x) =>
+          released.includes(x.id) ? { ...x, status: 'free', held_by: null } : x
+        )
+      )
+    }
+
+    setCart((prev) => prev.filter((n) => !released.includes(n)))
+
+    setTimeout(() => {
+      setCart((prev) => {
+        if (prev.length === 0) setExpiresAt(null)
+        return prev
+      })
+    }, 0)
+  }
+
+  const emptyCart = () => releaseMany([...cart])
+
+  const pickRandomAll = async (qty: number) => {
+    if (!profile) return
+    if (isBlocked) {
+      alert(limitInfo?.reason || 'No podés hacer más compras en este momento')
+      return
+    }
+    const can = Math.min(qty, MAX_PER_ORDER - cart.length)
+    if (can <= 0) {
+      alert(`Máximo ${MAX_PER_ORDER} por compra`)
+      return
+    }
+
+    const res = await fetch('/api/random-hold', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: profile.id, qty: can }),
+    })
+    const j = await res.json()
+    if (!res.ok) {
+      alert(j?.error || 'No se pudo seleccionar al azar')
+      return
+    }
+
+    const held: number[] = Array.isArray(j?.held)
+      ? (j.held as unknown[]).map((x) => Number(x))
+      : []
+    const newHeld: number[] = held.filter((n) => !cart.includes(n))
+
+    if (newHeld.length === 0) {
+      alert('No se encontraron números libres suficientes')
+      return
+    }
+
+    setCart((prev) => Array.from(new Set([...prev, ...newHeld])))
+    setRows((prev) =>
+      prev.map((x) =>
+        newHeld.includes(x.id)
+          ? { ...x, status: 'held', held_by: profile!.id }
+          : x
+      )
+    )
+    setExpiresAt(j.expiresAt || new Date(Date.now() + 10 * 60_000).toISOString())
+  }
+
+  const handleSearchGo = (v: number) => {
+    const targetPage = Math.ceil(v / PAGE_SIZE)
+    setPage(targetPage)
+    setSearchTarget(v)
+  }
+
+  const handleConfirmPurchase = async () => {
+    if (!profile || cart.length === 0) return
+
+    await loadPurchaseLimits(profile.id)
+    
+    setTimeout(() => {
+      if (limitInfo && !limitInfo.canPurchase) {
+        alert(limitInfo.reason || 'No podés hacer más compras en este momento')
+        return
+      }
+
+      const qs = cart.join(',')
+      setCart([])
+      setExpiresAt(null)
+      router.push(`/checkout?n=${qs}`)
+    }, 100)
   }
 
   return (
-    <div className="max-w-2xl mx-auto bg-white border rounded-2xl p-6 shadow-sm space-y-6">
-      <header className="space-y-1">
-        <h2 className="text-xl font-semibold">Confirmar compra</h2>
-        <p className="text-sm text-gray-600">
-          Tenés <b>1 hora</b> para subir el comprobante; si no, se cancelará la orden y se liberarán los números.
-        </p>
-        <div className="text-xs">
-          Estado: <span className="px-2 py-1 rounded-lg border">{orderStatus}</span>
-        </div>
-      </header>
-
-      <section className="space-y-1">
-        <p className="text-sm">Números ({numbers.length}):</p>
-        <div className="flex flex-wrap gap-2">
-          {numbers.map(n => (
-            <span key={n} className="text-sm px-2 py-1 rounded-lg bg-amber-100 border">{n}</span>
-          ))}
-        </div>
-        <p className="mt-2">Precio por número: <b>${pricePer} ARS</b></p>
-        <p>Total: <b>{totalFmt}</b></p>
-      </section>
-
-      <section className="rounded-xl border p-4">
-        <h3 className="font-semibold mb-2">Transferencia bancaria</h3>
-        <ul className="text-sm space-y-1">
-          <li>Alias: <b>{bank?.alias || '-'}</b></li>
-          <li>CVU: <b>{bank?.cvu || '-'}</b></li>
-          <li>Titular: <b>{bank?.holder || '-'}</b></li>
-        </ul>
-        {support?.whatsapp && (
-          <a
-            href={`https://wa.me/${support.whatsapp.replace(/[^\d]/g,'')}`}
-            target="_blank" rel="noreferrer"
-            className="inline-block mt-3 px-3 py-2 rounded-xl border"
-          >
-            Soporte por WhatsApp
-          </a>
-        )}
-      </section>
-
-      {!showProofBlock && canUpload && !isClosed && (
-        <section className="rounded-xl border p-4">
-          <h3 className="font-semibold mb-2">Subir comprobante (JPG/PNG/PDF · máx. 10MB)</h3>
-          <input type="file" accept=".jpg,.jpeg,.png,.pdf" onChange={onFileChange} className="block" />
+    <div>
+      {/* Tabs para mobile */}
+      <div className="lg:hidden sticky top-0 z-10 bg-white border-b mb-4">
+        <div className="flex">
           <button
-            disabled={!file || uploading}
-            onClick={uploadProof}
-            className="mt-3 px-4 py-2 rounded-xl bg-black text-white disabled:opacity-50"
+            onClick={() => setActiveTab('comprar')}
+            className={`flex-1 px-4 py-3 text-sm font-medium ${
+              activeTab === 'comprar'
+                ? 'text-black border-b-2 border-black'
+                : 'text-gray-500'
+            }`}
           >
-            {uploading ? 'Subiendo…' : 'Enviar comprobante'}
+            Comprar
           </button>
-          <p className="text-xs text-gray-600 mt-2">En 24 h se acreditarán los números.</p>
-        </section>
-      )}
+          <button
+            onClick={() => setActiveTab('cuenta')}
+            className={`flex-1 px-4 py-3 text-sm font-medium ${
+              activeTab === 'cuenta'
+                ? 'text-black border-b-2 border-black'
+                : 'text-gray-500'
+            }`}
+          >
+            Mi Cuenta
+          </button>
+        </div>
+      </div>
 
-      {(showProofBlock || isClosed || orderStatus === 'under_review') && (
-        <section className="rounded-xl border p-4">
-          <h3 className="font-semibold mb-2">Comprobante</h3>
-          {proofUrl ? (
-            <a href={proofUrl} target="_blank" rel="noreferrer" className="px-3 py-2 rounded-xl border inline-block">
-              Ver comprobante
-            </a>
-          ) : (
-            <p className="text-sm text-gray-600">No hay comprobante adjunto.</p>
-          )}
-
-          {!isClosed && proofUrl && (
-            <button
-              onClick={() => setConfirmOpen(true)}
-              className="ml-2 px-3 py-2 rounded-xl bg-rose-600 text-white"
+      {/* Desktop: Layout original con columnas */}
+      <div className="hidden lg:grid lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {/* Columna izquierda */}
+        <div className="space-y-6 lg:col-span-1">
+          {limitInfo && (
+            <div
+              className={`border rounded-2xl p-4 shadow-sm ${
+                limitInfo.canPurchase
+                  ? 'bg-emerald-50 border-emerald-200'
+                  : 'bg-rose-50 border-rose-200'
+              }`}
             >
-              Eliminar comprobante
-            </button>
-          )}
-
-          {orderStatus === 'rejected' && (
-            <p className="text-xs text-amber-600 mt-2">
-              Tu comprobante fue rechazado. Podés subir uno nuevo.
-            </p>
-          )}
-
-          {orderStatus === 'under_review' && (
-            <p className="text-xs text-gray-600 mt-2">
-              En revisión. Un admin confirmará dentro de 24 h.
-            </p>
-          )}
-
-          {confirmOpen && (
-            <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-              <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
-                <h4 className="font-semibold mb-2">¿Eliminar comprobante?</h4>
-                <p className="text-sm text-gray-600 mb-4">Esta acción no se puede deshacer.</p>
-                <div className="flex gap-2 justify-end">
-                  <button onClick={() => setConfirmOpen(false)} className="px-3 py-2 rounded-xl border">Cancelar</button>
-                  <button onClick={deleteProof} className="px-3 py-2 rounded-xl bg-rose-600 text-white">Eliminar</button>
-                </div>
+              <h3 className="font-semibold mb-2 text-sm">Estado de compras</h3>
+              <div className="space-y-1 text-sm">
+                <p>
+                  Compras activas:{' '}
+                  <b>
+                    {limitInfo.activePurchases}/{limitInfo.maxPurchases}
+                  </b>
+                </p>
+                {!limitInfo.canPurchase && limitInfo.reason && (
+                  <>
+                    <p className="text-rose-800 text-xs mt-2 font-medium">
+                      ⚠️ {limitInfo.reason}
+                    </p>
+                    {limitInfo.activePurchases >= limitInfo.maxPurchases && (
+                      <p className="text-rose-700 text-xs mt-1 font-semibold">
+                        No podés seleccionar más números hasta que se libere un cupo.
+                      </p>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           )}
-        </section>
-      )}
-    </div>
-  )
-}
 
-export default function CheckoutPage() {
-  return (
-    <Suspense fallback={
-      <div className="max-w-2xl mx-auto bg-white border rounded-2xl p-6 shadow-sm">
-        Cargando checkout…
+          <MyNumbers userId={profile?.id} />
+
+          <div className="bg-white border rounded-2xl p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-semibold">Carrito</h3>
+              <span className="text-xs text-gray-500">
+                {cart.length}/{MAX_PER_ORDER} · expira {countdown || '--:--'}
+              </span>
+            </div>
+
+            {cart.length === 0 ? (
+              <p className="text-sm text-gray-600">No hay números en el carrito.</p>
+            ) : (
+              <>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {cart
+                    .slice()
+                    .sort((a, b) => a - b)
+                    .map((n) => (
+                      <button
+                        key={n}
+                        onClick={() => releaseOne(n)}
+                        className="text-sm px-2 py-1 rounded-lg bg-amber-100 border hover:bg-amber-200"
+                        title="Quitar del carrito"
+                      >
+                        {n} <span className="ml-1">×</span>
+                      </button>
+                    ))}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={emptyCart}
+                    className="px-3 py-2 rounded-xl border"
+                  >
+                    Vaciar
+                  </button>
+                  <button
+                    disabled={cart.length === 0}
+                    onClick={handleConfirmPurchase}
+                    className="px-3 py-2 rounded-xl bg-black text-white disabled:opacity-50"
+                  >
+                    Confirmar
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="bg-white border rounded-2xl p-5 shadow-sm">
+            <h3 className="font-semibold mb-3">
+              Acciones rápidas (al azar en toda la rifa)
+            </h3>
+            <div className="flex gap-2">
+              <button
+                onClick={() => pickRandomAll(1)}
+                disabled={isBlocked}
+                className="px-3 py-2 rounded-xl border w-full disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                +1
+              </button>
+              <button
+                onClick={() => pickRandomAll(5)}
+                disabled={isBlocked}
+                className="px-3 py-2 rounded-xl border w-full disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                +5
+              </button>
+              <button
+                onClick={() => pickRandomAll(10)}
+                disabled={isBlocked}
+                className="px-3 py-2 rounded-xl border w-full disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                +10
+              </button>
+            </div>
+          </div>
+
+          <OrderHistory userId={profile?.id} />
+        </div>
+
+        {/* Derecha: buscador + grilla */}
+        <div className="lg:col-span-2 xl:col-span-3 space-y-4">
+          <div className="bg-white border rounded-2xl p-4 shadow-sm flex flex-col gap-3 sm:flex-row sm:items-center">
+            <SearchNumber
+              total={TOTAL_NUMBERS}
+              pageSize={PAGE_SIZE}
+              onGo={handleSearchGo}
+            />
+            <div className="sm:ml-auto flex items-center gap-2">
+              <button
+                onClick={() => goTo(page - 1)}
+                className="px-3 py-2 rounded-xl border"
+              >
+                «
+              </button>
+              <span className="text-sm">
+                Página {page}/{Math.ceil(TOTAL_NUMBERS / PAGE_SIZE)}
+              </span>
+              <button
+                onClick={() => goTo(page + 1)}
+                className="px-3 py-2 rounded-xl border"
+              >
+                »
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 xl:grid-cols-12 gap-1.5 bg-white border rounded-2xl p-4 shadow-sm">
+            {loading
+              ? Array.from({ length: PAGE_SIZE }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="h-9 md:h-10 rounded-lg bg-gray-100 animate-pulse"
+                  />
+                ))
+              : rows.map((r) => {
+                  const isMineHeld = r.status === 'held' && r.held_by === profile?.id
+                  const isLocked = !!r.order_id
+                  const disabled =
+                    isBlocked ||
+                    isLocked ||
+                    r.status === 'sold' ||
+                    (r.status === 'held' && !isMineHeld) ||
+                    (r.status === 'free' && cart.length >= MAX_PER_ORDER)
+
+                  return (
+                    <button
+                      key={r.id}
+                      id={`num-${r.id}`}
+                      onClick={() =>
+                        isLocked
+                          ? undefined
+                          : isMineHeld
+                          ? releaseOne(r.id)
+                          : pickOne(r.id)
+                      }
+                      disabled={disabled}
+                      className={`h-9 md:h-10 rounded-lg text-[11px] md:text-xs border ${colorFor(
+                        r
+                      )} disabled:opacity-60 disabled:cursor-not-allowed`}
+                      title={
+                        isBlocked
+                          ? 'Llegaste al límite de compras activas'
+                          : isLocked
+                          ? `#${r.id} · en orden`
+                          : `#${r.id} · ${r.status}${isMineHeld ? ' (tuyo)' : ''}`
+                      }
+                    >
+                      {r.id}
+                    </button>
+                  )
+                })}
+          </div>
+        </div>
       </div>
-    }>
-      <CheckoutPageInner />
-    </Suspense>
+
+      {/* Mobile: Contenido según tab activo */}
+      <div className="lg:hidden space-y-4">
+        {activeTab === 'comprar' && (
+          <>
+            {/* Banner de límites */}
+            {limitInfo && (
+              <div
+                className={`border rounded-2xl p-4 shadow-sm ${
+                  limitInfo.canPurchase
+                    ? 'bg-emerald-50 border-emerald-200'
+                    : 'bg-rose-50 border-rose-200'
+                }`}
+              >
+                <h3 className="font-semibold mb-2 text-sm">Estado de compras</h3>
+                <div className="space-y-1 text-sm">
+                  <p>
+                    Compras activas:{' '}
+                    <b>
+                      {limitInfo.activePurchases}/{limitInfo.maxPurchases}
+                    </b>
+                  </p>
+                  {!limitInfo.canPurchase && limitInfo.reason && (
+                    <>
+                      <p className="text-rose-800 text-xs mt-2 font-medium">
+                        ⚠️ {limitInfo.reason}
+                      </p>
+                      {limitInfo.activePurchases >= limitInfo.maxPurchases && (
+                        <p className="text-rose-700 text-xs mt-1 font-semibold">
+                          No podés seleccionar más números hasta que se libere un cupo.
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Carrito */}
+            <div className="bg-white border rounded-2xl p-4 shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="font-semibold">Carrito</h3>
+                <span className="text-xs text-gray-500">
+                  {cart.length}/{MAX_PER_ORDER} · {countdown || '--:--'}
+                </span>
+              </div>
+
+              {cart.length === 0 ? (
+                <p className="text-sm text-gray-600">No hay números en el carrito.</p>
+              ) : (
+                <>
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {cart
+                      .slice()
+                      .sort((a, b) => a - b)
+                      .map((n) => (
+                        <button
+                          key={n}
+                          onClick={() => releaseOne(n)}
+                          className="text-sm px-2 py-1 rounded-lg bg-amber-100 border"
+                        >
+                          {n} <span className="ml-1">×</span>
+                        </button>
+                      ))}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button onClick={emptyCart} className="px-3 py-2 rounded-xl border">
+                      Vaciar
+                    </button>
+                    <button
+                      disabled={cart.length === 0}
+                      onClick={handleConfirmPurchase}
+                      className="px-3 py-2 rounded-xl bg-black text-white disabled:opacity-50"
+                    >
+                      Confirmar
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Acciones rápidas */}
+            <div className="bg-white border rounded-2xl p-4 shadow-sm">
+              <h3 className="font-semibold mb-3">Acciones rápidas</h3>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => pickRandomAll(1)}
+                  disabled={isBlocked}
+                  className="px-3 py-2 rounded-xl border w-full disabled:opacity-50"
+                >
+                  +1
+                </button>
+                <button
+                  onClick={() => pickRandomAll(5)}
+                  disabled={isBlocked}
+                  className="px-3 py-2 rounded-xl border w-full disabled:opacity-50"
+                >
+                  +5
+                </button>
+                <button
+                  onClick={() => pickRandomAll(10)}
+                  disabled={isBlocked}
+                  className="px-3 py-2 rounded-xl border w-full disabled:opacity-50"
+                >
+                  +10
+                </button>
+              </div>
+            </div>
+
+            {/* Buscador */}
+            <div className="bg-white border rounded-2xl p-4 shadow-sm">
+              <SearchNumber
+                total={TOTAL_NUMBERS}
+                pageSize={PAGE_SIZE}
+                onGo={handleSearchGo}
+              />
+              <div className="flex items-center justify-center gap-2 mt-3">
+                <button onClick={() => goTo(page - 1)} className="px-3 py-2 rounded-xl border">
+                  «
+                </button>
+                <span className="text-sm">
+                  Pág. {page}/{Math.ceil(TOTAL_NUMBERS / PAGE_SIZE)}
+                </span>
+                <button onClick={() => goTo(page + 1)} className="px-3 py-2 rounded-xl border">
+                  »
+                </button>
+              </div>
+            </div>
+
+            {/* Grilla de números */}
+            <div className="grid grid-cols-5 gap-1.5 bg-white border rounded-2xl p-4 shadow-sm">
+              {loading
+                ? Array.from({ length: PAGE_SIZE }).map((_, i) => (
+                    <div key={i} className="h-10 rounded-lg bg-gray-100 animate-pulse" />
+                  ))
+                : rows.map((r) => {
+                    const isMineHeld = r.status === 'held' && r.held_by === profile?.id
+                    const isLocked = !!r.order_id
+                    const disabled =
+                      isBlocked ||
+                      isLocked ||
+                      r.status === 'sold' ||
+                      (r.status === 'held' && !isMineHeld) ||
+                      (r.status === 'free' && cart.length >= MAX_PER_ORDER)
+
+                    return (
+                      <button
+                        key={r.id}
+                        id={`num-${r.id}`}
+                        onClick={() =>
+                          isLocked ? undefined : isMineHeld ? releaseOne(r.id) : pickOne(r.id)
+                        }
+                        disabled={disabled}
+                        className={`h-10 rounded-lg text-xs border ${colorFor(
+                          r
+                        )} disabled:opacity-60`}
+                      >
+                        {r.id}
+                      </button>
+                    )
+                  })}
+            </div>
+          </>
+        )}
+
+        {activeTab === 'cuenta' && (
+          <>
+            <MyNumbers userId={profile?.id} />
+            <OrderHistory userId={profile?.id} />
+          </>
+        )}
+      </div>
+    </div>
   )
 }

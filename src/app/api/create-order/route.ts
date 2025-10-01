@@ -1,19 +1,30 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
+import { checkPurchaseLimits } from '@/lib/purchase-limits'
 
 type Body = { userId: string; numbers: number[] }
-type OrderLite = { id: string; user_id: string; status: string; price_per_number: number | null; total_amount: number | null }
-type RaffleRow = { id: number; status: 'free' | 'held' | 'sold'; held_by: string | null; order_id: string | null }
+type OrderLite = {
+  id: string
+  user_id: string
+  status: string
+  price_per_number: number | null
+  total_amount: number | null
+}
+type RaffleRow = {
+  id: number
+  status: 'free' | 'held' | 'sold'
+  held_by: string | null
+  order_id: string | null
+}
 
 const PRICE = 1000 // ARS
-const MAX_PER_ORDER = 50 // mantener en sync con la UI
+const MAX_PER_ORDER = 50
 
-// usar Web Crypto (funciona en Node y Edge)
 async function sha256Hex(text: string) {
   const enc = new TextEncoder().encode(text)
   const buf = await crypto.subtle.digest('SHA-256', enc)
   return Array.from(new Uint8Array(buf))
-    .map(b => b.toString(16).padStart(2, '0'))
+    .map((b) => b.toString(16).padStart(2, '0'))
     .join('')
     .slice(0, 32)
 }
@@ -25,7 +36,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Faltan datos' }, { status: 400 })
     }
 
-    const ids = Array.from(new Set(numbers.map(n => Number(n))))
+    const ids = Array.from(new Set(numbers.map((n) => Number(n))))
       .filter(Number.isFinite)
       .sort((a, b) => a - b)
 
@@ -33,6 +44,24 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { error: `Cantidad inválida (1 a ${MAX_PER_ORDER})` },
         { status: 400 }
+      )
+    }
+
+    // ✅ VALIDAR LÍMITES DE COMPRA
+    const limitCheck = await checkPurchaseLimits(userId, ids.length)
+    if (!limitCheck.canPurchase) {
+      return NextResponse.json(
+        {
+          error: limitCheck.reason,
+          limitExceeded: true,
+          details: {
+            activePurchases: limitCheck.activePurchases,
+            maxPurchases: limitCheck.maxPurchases,
+            nextAvailableAt: limitCheck.nextAvailableAt,
+            hoursRemaining: limitCheck.hoursRemaining,
+          },
+        },
+        { status: 429 } // 429 = Too Many Requests
       )
     }
 
@@ -52,20 +81,23 @@ export async function POST(req: Request) {
     const rlist: RaffleRow[] = (rows as RaffleRow[]) ?? []
 
     // validar que sean tuyos (held_by tú) o ya estén en una orden (chequeamos dueño abajo)
-    const invalid = ids.filter(id => {
-      const r = rlist.find(x => x.id === id)
+    const invalid = ids.filter((id) => {
+      const r = rlist.find((x) => x.id === id)
       return !r || !((r.status === 'held' && r.held_by === userId) || r.order_id)
     })
     if (invalid.length) {
       return NextResponse.json(
-        { error: 'Algunos números no están reservados por vos', missing: invalid },
+        {
+          error: 'Algunos números no están reservados por vos',
+          missing: invalid,
+        },
         { status: 409 }
       )
     }
 
     // si ya están en una orden, reutilizarla (y validar dueño)
     const inOrderIds = Array.from(
-      new Set(rlist.filter(r => r.order_id).map(r => String(r.order_id)))
+      new Set(rlist.filter((r) => r.order_id).map((r) => String(r.order_id)))
     )
 
     if (inOrderIds.length) {
@@ -85,19 +117,28 @@ export async function POST(req: Request) {
 
       const orderRow = ord as OrderLite | null
       if (ordErr || !orderRow) {
-        return NextResponse.json({ error: 'Orden existente no encontrada' }, { status: 404 })
+        return NextResponse.json(
+          { error: 'Orden existente no encontrada' },
+          { status: 404 }
+        )
       }
       if (orderRow.user_id !== userId) {
-        return NextResponse.json({ error: 'No autorizado (orden de otro usuario)' }, { status: 403 })
+        return NextResponse.json(
+          { error: 'No autorizado (orden de otro usuario)' },
+          { status: 403 }
+        )
       }
       if (['paid', 'canceled'].includes(String(orderRow.status))) {
-        return NextResponse.json({ error: 'La orden ya fue cerrada' }, { status: 409 })
+        return NextResponse.json(
+          { error: 'La orden ya fue cerrada' },
+          { status: 409 }
+        )
       }
 
       // adjuntar cualquier número HELD por vos aún sin order_id
       const attachIds = rlist
-        .filter(r => r.status === 'held' && r.held_by === userId && !r.order_id)
-        .map(r => r.id)
+        .filter((r) => r.status === 'held' && r.held_by === userId && !r.order_id)
+        .map((r) => r.id)
 
       if (attachIds.length) {
         await admin
@@ -115,7 +156,7 @@ export async function POST(req: Request) {
         .eq('order_id', existingOrderId)
 
       const price = orderRow.price_per_number ?? PRICE
-      const list = (numsInOrder ?? []).map(r => Number(r.id))
+      const list = (numsInOrder ?? []).map((r) => Number(r.id))
       const total = list.length * price
 
       return NextResponse.json({
@@ -129,7 +170,6 @@ export async function POST(req: Request) {
     // no había orden -> crear 1 sola (idempotente)
     const fingerprint = await sha256Hex(`${userId}:${ids.join(',')}`)
 
-    // intentamos INSERT; si choca por índice único (otro request ganó), seleccionamos la existente
     let orderId: string
 
     const tryInsert = await admin
@@ -146,7 +186,6 @@ export async function POST(req: Request) {
 
     if (tryInsert.error) {
       const msg = String(tryInsert.error.message || '')
-      // ¿índice único violado? (23505)
       if (!msg.includes('duplicate key') && tryInsert.error.code !== '23505') {
         return NextResponse.json({ error: tryInsert.error.message }, { status: 400 })
       }
@@ -169,7 +208,6 @@ export async function POST(req: Request) {
       orderId = (tryInsert.data as { id: string }).id
     }
 
-    // asociar números a esa orden (si otro request ya los asoció, esta query no toca nada)
     await admin
       .from('raffle_numbers')
       .update({ order_id: orderId, updated_at: nowIso })
@@ -178,13 +216,12 @@ export async function POST(req: Request) {
       .eq('held_by', userId)
       .is('order_id', null)
 
-    // leer números efectivos en la orden
     const { data: numsNow } = await admin
       .from('raffle_numbers')
       .select('id')
       .eq('order_id', orderId)
 
-    const numbersInOrder = (numsNow ?? []).map(r => Number(r.id))
+    const numbersInOrder = (numsNow ?? []).map((r) => Number(r.id))
     const price = PRICE
     const total = (numbersInOrder.length || ids.length) * price
 

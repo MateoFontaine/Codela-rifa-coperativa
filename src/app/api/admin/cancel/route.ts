@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
+import { updateActivePurchasesCount } from '@/lib/purchase-limits' // 👈 AGREGAR
 
 type Body = { userId: string; orderId: string }
 
@@ -21,6 +22,13 @@ export async function POST(req: Request) {
     if (!au?.is_admin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
+
+    // 👇 AGREGAR: obtener el user_id de la orden
+    const { data: order } = await admin
+      .from('orders')
+      .select('user_id')
+      .eq('id', orderId)
+      .single()
 
     // liberar números de la orden
     const { error: numsErr } = await admin
@@ -44,6 +52,11 @@ export async function POST(req: Request) {
       .eq('id', orderId)
     if (upErr) {
       return NextResponse.json({ error: upErr.message }, { status: 400 })
+    }
+
+    // 👇 AGREGAR: actualizar contador del usuario
+    if (order?.user_id) {
+      await updateActivePurchasesCount(order.user_id)
     }
 
     return NextResponse.json({ ok: true })

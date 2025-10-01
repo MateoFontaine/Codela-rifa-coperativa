@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
+import { updateActivePurchasesCount } from '@/lib/purchase-limits' // 👈 AGREGAR
 
 type Body = { userId: string; orderId: string; reason?: string }
 
@@ -22,6 +23,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
+    // 👇 AGREGAR: obtener el user_id de la orden
+    const { data: order } = await admin
+      .from('orders')
+      .select('user_id')
+      .eq('id', orderId)
+      .single()
+
     // marcar orden como rechazada
     const { error } = await admin
       .from('orders')
@@ -38,6 +46,11 @@ export async function POST(req: Request) {
         .from('payment_proofs')
         .update({ notes: reason })
         .eq('order_id', orderId)
+    }
+
+    // 👇 AGREGAR: actualizar contador del usuario
+    if (order?.user_id) {
+      await updateActivePurchasesCount(order.user_id)
     }
 
     return NextResponse.json({ ok: true })

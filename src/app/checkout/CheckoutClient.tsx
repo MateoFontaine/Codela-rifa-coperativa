@@ -53,7 +53,7 @@ export default function UserRaffle() {
   const [activeTab, setActiveTab] = useState<'comprar' | 'cuenta'>('comprar')
 
   // Variable para saber si está bloqueado
-  const isBlocked = limitInfo && !limitInfo.canPurchase
+  const isBlocked = Boolean(limitInfo && !limitInfo.canPurchase)
 
   // Cargar límites de compra
   const loadPurchaseLimits = async (userId: string) => {

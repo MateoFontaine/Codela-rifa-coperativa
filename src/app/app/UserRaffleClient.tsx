@@ -330,24 +330,13 @@ export default function UserRaffle() {
     setSearchTarget(v)
   }
 
-  const handleConfirmPurchase = async () => {
-    if (!profile || cart.length === 0) return
-
-    await loadPurchaseLimits(profile.id)
-    
-    setTimeout(() => {
-      if (limitInfo && !limitInfo.canPurchase) {
-        alert(limitInfo.reason || 'No podés hacer más compras en este momento')
-        return
-      }
-
-      const qs = cart.join(',')
-      setCart([])
-      setExpiresAt(null)
-      router.push(`/checkout?n=${qs}`)
-    }, 100)
-  }
-
+ const handleConfirmPurchase = () => {
+  if (!profile || cart.length === 0) return
+  
+  const qs = cart.join(',')
+  window.location.href = `/checkout?n=${qs}`
+}
+ 
   return (
     <div>
       {/* Tabs para mobile */}

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { sendComprobantRecibido } from '@/lib/email'
+// import { sendComprobantRecibido } from '@/lib/email' // 👈 COMENTADO
 
 type Status =
   | 'awaiting_proof'
@@ -82,9 +82,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: upOrd.message }, { status: 400 })
     }
 
-    // 4) 🚀 NUEVO: Enviar email de comprobante recibido
+    // 4) Email deshabilitado temporalmente
+    /*
     try {
-      // Obtener email del usuario
       const { data: userRow, error: userErr } = await admin
         .from('app_users')
         .select('email')
@@ -94,7 +94,6 @@ export async function POST(req: Request) {
       if (userErr || !userRow?.email) {
         console.error('Error obteniendo email del usuario:', userErr)
       } else {
-        // Enviar email de notificación
         const emailResult = await sendComprobantRecibido(
           userRow.email,
           orderId,
@@ -103,13 +102,12 @@ export async function POST(req: Request) {
         
         if (!emailResult.success) {
           console.error('Error enviando email de comprobante:', emailResult.error)
-          // No fallar la request por error de email
         }
       }
     } catch (emailError) {
       console.error('Error en proceso de email:', emailError)
-      // No fallar la request por error de email
     }
+    */
 
     return NextResponse.json({ ok: true })
   } catch (e: unknown) {

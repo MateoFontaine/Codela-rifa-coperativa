@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
+import { sendComprobantRecibido } from '@/lib/email'
 
 type Status =
   | 'awaiting_proof'
@@ -22,6 +23,7 @@ type OrderRow = {
   id: string
   user_id: string
   status: Status
+  total_amount: number
 }
 
 export async function POST(req: Request) {
@@ -36,7 +38,7 @@ export async function POST(req: Request) {
     // 1) Validar orden y dueño
     const { data: ordRaw, error: ordErr } = await admin
       .from('orders')
-      .select('id,user_id,status')
+      .select('id,user_id,status,total_amount')
       .eq('id', orderId)
       .single()
 
@@ -78,6 +80,35 @@ export async function POST(req: Request) {
 
     if (upOrd) {
       return NextResponse.json({ error: upOrd.message }, { status: 400 })
+    }
+
+    // 4) 🚀 NUEVO: Enviar email de comprobante recibido
+    try {
+      // Obtener email del usuario
+      const { data: userRow, error: userErr } = await admin
+        .from('app_users')
+        .select('email')
+        .eq('id', userId)
+        .single()
+
+      if (userErr || !userRow?.email) {
+        console.error('Error obteniendo email del usuario:', userErr)
+      } else {
+        // Enviar email de notificación
+        const emailResult = await sendComprobantRecibido(
+          userRow.email,
+          orderId,
+          ord.total_amount || 0
+        )
+        
+        if (!emailResult.success) {
+          console.error('Error enviando email de comprobante:', emailResult.error)
+          // No fallar la request por error de email
+        }
+      }
+    } catch (emailError) {
+      console.error('Error en proceso de email:', emailError)
+      // No fallar la request por error de email
     }
 
     return NextResponse.json({ ok: true })

@@ -1,7 +1,8 @@
+
+
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 
-// Tipos de ayuda
 type Status =
   | 'awaiting_proof'
   | 'under_review'
@@ -47,16 +48,26 @@ export async function POST(req: Request) {
       admin.from('raffle_numbers').select('*', { count: 'exact', head: true }).eq('status', 'sold'),
     ])
 
-    // últimas órdenes
-    const { data: ordersRaw } = await admin
-      .from('orders')
-      .select('id,user_id,status,total_amount,price_per_number,created_at')
-      .order('created_at', { ascending: false })
-      .limit(30)
+    // 🔥 CAMBIO IMPORTANTE: Traer TODAS las órdenes que requieren acción (sin límite)
+   const { data: pendingOrdersRaw } = await admin
+  .from('orders')
+  .select('id,user_id,status,total_amount,price_per_number,created_at')
+  .in('status', ['awaiting_proof', 'under_review', 'pending', 'rejected']) // 👈 Agregado 'rejected'
+  .order('created_at', { ascending: false })
+    // Sin .limit() - traemos TODAS las pendientes
 
-    const orders: OrderRow[] = (ordersRaw as OrderRow[]) ?? []
+    // Traer las últimas 50 completadas (paid, rejected, canceled) para referencia
+   const { data: completedOrdersRaw } = await admin
+  .from('orders')
+  .select('id,user_id,status,total_amount,price_per_number,created_at')
+  .in('status', ['paid', 'canceled']) // 👈 Quitado 'rejected'
+  .order('created_at', { ascending: false })
+  .limit(50)
 
-    // Si no hay órdenes, devolver solo los counts
+    // Combinar ambas listas
+    const ordersRaw = [...(pendingOrdersRaw ?? []), ...(completedOrdersRaw ?? [])]
+    const orders: OrderRow[] = ordersRaw as OrderRow[]
+
     if (orders.length === 0) {
       return NextResponse.json({
         counts: {

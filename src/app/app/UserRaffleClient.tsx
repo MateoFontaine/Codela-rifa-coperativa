@@ -29,6 +29,8 @@ const PAGE_SIZE = 100
 const TOTAL_NUMBERS = 100000
 const MAX_PER_ORDER = 50
 
+const formatNumber = (n: number) => String(n).padStart(5, '0')
+
 export default function UserRaffle() {
   const supa = useMemo(() => supabaseBrowser(), [])
   const router = useRouter()
@@ -51,6 +53,9 @@ export default function UserRaffle() {
 
   // tabs para mobile
   const [activeTab, setActiveTab] = useState<'comprar' | 'cuenta'>('comprar')
+
+  // 🔥 NUEVO: Estado para tracking de botones de azar en proceso
+  const [loadingRandom, setLoadingRandom] = useState<number | null>(null)
 
   // Variable para saber si está bloqueado
   const isBlocked = !!(limitInfo && !limitInfo.canPurchase)
@@ -280,6 +285,7 @@ export default function UserRaffle() {
 
   const emptyCart = () => releaseMany([...cart])
 
+  // 🔥 MODIFICADO: Agregar spinner durante la carga
   const pickRandomAll = async (qty: number) => {
     if (!profile) return
     if (isBlocked) {
@@ -292,36 +298,46 @@ export default function UserRaffle() {
       return
     }
 
-    const res = await fetch('/api/random-hold', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: profile.id, qty: can }),
-    })
-    const j = await res.json()
-    if (!res.ok) {
-      alert(j?.error || 'No se pudo seleccionar al azar')
-      return
-    }
+    // Marcar como cargando
+    setLoadingRandom(qty)
 
-    const held: number[] = Array.isArray(j?.held)
-      ? (j.held as unknown[]).map((x) => Number(x))
-      : []
-    const newHeld: number[] = held.filter((n) => !cart.includes(n))
+    try {
+      const res = await fetch('/api/random-hold', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: profile.id, qty: can }),
+      })
+      const j = await res.json()
+      if (!res.ok) {
+        alert(j?.error || 'No se pudo seleccionar al azar')
+        return
+      }
 
-    if (newHeld.length === 0) {
-      alert('No se encontraron números libres suficientes')
-      return
-    }
+      const held: number[] = Array.isArray(j?.held)
+        ? (j.held as unknown[]).map((x) => Number(x))
+        : []
+      const newHeld: number[] = held.filter((n) => !cart.includes(n))
 
-    setCart((prev) => Array.from(new Set([...prev, ...newHeld])))
-    setRows((prev) =>
-      prev.map((x) =>
-        newHeld.includes(x.id)
-          ? { ...x, status: 'held', held_by: profile!.id }
-          : x
+      if (newHeld.length === 0) {
+        alert('No se encontraron números libres suficientes')
+        return
+      }
+
+      setCart((prev) => Array.from(new Set([...prev, ...newHeld])))
+      setRows((prev) =>
+        prev.map((x) =>
+          newHeld.includes(x.id)
+            ? { ...x, status: 'held', held_by: profile!.id }
+            : x
+        )
       )
-    )
-    setExpiresAt(j.expiresAt || new Date(Date.now() + 10 * 60_000).toISOString())
+      setExpiresAt(j.expiresAt || new Date(Date.now() + 10 * 60_000).toISOString())
+    } catch (error) {
+      alert('Error al seleccionar números al azar')
+    } finally {
+      // Quitar el estado de cargando
+      setLoadingRandom(null)
+    }
   }
 
   const handleSearchGo = (v: number) => {
@@ -330,13 +346,38 @@ export default function UserRaffle() {
     setSearchTarget(v)
   }
 
- const handleConfirmPurchase = () => {
-  if (!profile || cart.length === 0) return
-  
-  const qs = cart.join(',')
-  window.location.href = `/checkout?n=${qs}`
-}
+  const handleConfirmPurchase = () => {
+    if (!profile || cart.length === 0) return
+    
+    const qs = cart.join(',')
+    window.location.href = `/checkout?n=${qs}`
+  }
  
+  // 🔥 NUEVO: Componente de botón con spinner
+  const RandomButton = ({ qty, disabled }: { qty: number; disabled: boolean }) => {
+    const isLoading = loadingRandom === qty
+    
+    return (
+      <button
+        onClick={() => pickRandomAll(qty)}
+        disabled={disabled || loadingRandom !== null}
+        className="px-3 py-2 rounded-xl border w-full disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+      >
+        {isLoading ? (
+          <>
+            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span>...</span>
+          </>
+        ) : (
+          `+${qty}`
+        )}
+      </button>
+    )
+  }
+
   return (
     <div>
       {/* Tabs para mobile */}
@@ -426,7 +467,7 @@ export default function UserRaffle() {
                         className="text-sm px-2 py-1 rounded-lg bg-amber-100 border hover:bg-amber-200"
                         title="Quitar del carrito"
                       >
-                        {n} <span className="ml-1">×</span>
+                        {formatNumber(n)} <span className="ml-1">×</span>
                       </button>
                     ))}
                 </div>
@@ -454,27 +495,9 @@ export default function UserRaffle() {
               Acciones rápidas (al azar en toda la rifa)
             </h3>
             <div className="flex gap-2">
-              <button
-                onClick={() => pickRandomAll(1)}
-                disabled={isBlocked}
-                className="px-3 py-2 rounded-xl border w-full disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                +1
-              </button>
-              <button
-                onClick={() => pickRandomAll(5)}
-                disabled={isBlocked}
-                className="px-3 py-2 rounded-xl border w-full disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                +5
-              </button>
-              <button
-                onClick={() => pickRandomAll(10)}
-                disabled={isBlocked}
-                className="px-3 py-2 rounded-xl border w-full disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                +10
-              </button>
+              <RandomButton qty={1} disabled={isBlocked} />
+              <RandomButton qty={5} disabled={isBlocked} />
+              <RandomButton qty={10} disabled={isBlocked} />
             </div>
           </div>
 
@@ -545,11 +568,11 @@ export default function UserRaffle() {
                         isBlocked
                           ? 'Llegaste al límite de compras activas'
                           : isLocked
-                          ? `#${r.id} · en orden`
-                          : `#${r.id} · ${r.status}${isMineHeld ? ' (tuyo)' : ''}`
+                          ? `#${formatNumber(r.id)} · en orden`
+                          : `#${formatNumber(r.id)} · ${r.status}${isMineHeld ? ' (tuyo)' : ''}`
                       }
                     >
-                      {r.id}
+                      {formatNumber(r.id)}
                     </button>
                   )
                 })}
@@ -615,9 +638,10 @@ export default function UserRaffle() {
                         <button
                           key={n}
                           onClick={() => releaseOne(n)}
-                          className="text-sm px-2 py-1 rounded-lg bg-amber-100 border"
+                          className="text-sm px-2 py-1 rounded-lg bg-amber-100 border hover:bg-amber-200"
+                          title="Quitar del carrito"
                         >
-                          {n} <span className="ml-1">×</span>
+                          {formatNumber(n)} <span className="ml-1">×</span>
                         </button>
                       ))}
                   </div>
@@ -641,27 +665,9 @@ export default function UserRaffle() {
             <div className="bg-white border rounded-2xl p-4 shadow-sm">
               <h3 className="font-semibold mb-3">Acciones rápidas</h3>
               <div className="flex gap-2">
-                <button
-                  onClick={() => pickRandomAll(1)}
-                  disabled={isBlocked}
-                  className="px-3 py-2 rounded-xl border w-full disabled:opacity-50"
-                >
-                  +1
-                </button>
-                <button
-                  onClick={() => pickRandomAll(5)}
-                  disabled={isBlocked}
-                  className="px-3 py-2 rounded-xl border w-full disabled:opacity-50"
-                >
-                  +5
-                </button>
-                <button
-                  onClick={() => pickRandomAll(10)}
-                  disabled={isBlocked}
-                  className="px-3 py-2 rounded-xl border w-full disabled:opacity-50"
-                >
-                  +10
-                </button>
+                <RandomButton qty={1} disabled={isBlocked} />
+                <RandomButton qty={5} disabled={isBlocked} />
+                <RandomButton qty={10} disabled={isBlocked} />
               </div>
             </div>
 

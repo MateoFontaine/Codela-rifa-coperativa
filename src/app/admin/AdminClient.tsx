@@ -18,7 +18,6 @@ type Order = {
   created_at: string
   numbers: number[]
   proofUrl: string | null
-  // 👇 agregado para contacto
   phone?: string | null
 }
 
@@ -31,7 +30,6 @@ type AdminOverviewResponse = {
 
 type ActionResponse = { ok?: boolean; error?: string }
 
-// ---- Usuarios (card)
 type UserRow = {
   id: string
   nombre: string | null
@@ -41,9 +39,8 @@ type UserRow = {
   ordenesPendientes: number
 }
 
-// ---- Detalle modal
 type UserDetailResponse = {
-  user: { id: string; nombre: string | null; email: string; dni: string | number | null; phone?: string | null } // 👈 phone agregado
+  user: { id: string; nombre: string | null; email: string; dni: string | number | null; phone?: string | null }
   numbers: number[]
   pendingCount: number
   orders: Array<{
@@ -66,7 +63,7 @@ const STATUS_LABEL: Record<Status, string> = {
 }
 
 const STATUS_STYLE: Record<Status, string> = {
-  awaiting_proof: 'bg-amber-50 text-amber-800 border border-amber-200 text-center',
+  awaiting_proof: 'bg-amber-50 text-amber-800 border border-amber-200',
   under_review: 'bg-sky-50 text-sky-800 border border-sky-200',
   paid: 'bg-emerald-50 text-emerald-800 border border-emerald-200',
   rejected: 'bg-rose-50 text-rose-800 border border-rose-200',
@@ -86,12 +83,16 @@ export default function AdminPage() {
   const [refreshing, setRefreshing] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [filter, setFilter] = useState('')
+  
+  // Estado para tracking de acciones en proceso
+  const [processingOrder, setProcessingOrder] = useState<string | null>(null)
 
-  // ---- Usuarios (card)
+  // Tab state
+  const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'review' | 'completed'>('pending')
+
   const [users, setUsers] = useState<UserRow[]>([])
   const [userFilter, setUserFilter] = useState('')
 
-  // ---- Modal detalle
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detail, setDetail] = useState<UserDetailResponse | null>(null)
@@ -99,12 +100,9 @@ export default function AdminPage() {
   const numbersSecRef = useRef<HTMLDivElement | null>(null)
   const ordersSecRef = useRef<HTMLDivElement | null>(null)
 
-  // === Helper: normalizar teléfono a link de WhatsApp (AR-friendly, pero sirve genérico si ya viene con país)
   function waHrefFrom(raw?: string | null): string | null {
     if (!raw) return null
     let num = raw.replace(/\D/g, '')
-    // Normalización común para Argentina:
-    // wa.me requiere: 549 + (área sin 0) + (línea sin 15)
     if (num.startsWith('549')) num = num.slice(3)
     else if (num.startsWith('54')) num = num.slice(2)
     num = num.replace(/^0/, '')
@@ -112,7 +110,6 @@ export default function AdminPage() {
     return `https://wa.me/549${num}`
   }
 
-  // === Traer phones desde app_users y “pegar” a las órdenes (sin tocar tu backend)
   async function enrichOrdersWithPhones(ordersIn: Order[]): Promise<Order[]> {
     const ids = Array.from(new Set(ordersIn.map(o => o.user_id))).filter(Boolean)
     if (ids.length === 0) return ordersIn
@@ -144,7 +141,6 @@ export default function AdminPage() {
 
       setCounts(body.counts)
 
-      // 👇 Enriquecemos las órdenes con el teléfono (frontend-only)
       const enriched = await enrichOrdersWithPhones(body.orders as Order[])
       setOrders(enriched)
 
@@ -189,7 +185,6 @@ export default function AdminPage() {
         throw new Error((body as unknown as { error?: string }).error || 'No se pudo cargar el detalle')
       }
 
-      // 👇 Traigo el phone de app_users y lo agrego al detalle (frontend-only)
       const { data: urow } = await supa
         .from('app_users')
         .select('phone')
@@ -204,7 +199,6 @@ export default function AdminPage() {
       setDetail(bodyWithPhone)
       setDetailLoading(false)
 
-      // pequeño scroll a la sección pedida
       setTimeout(() => {
         if (focusRef.current === 'numbers') numbersSecRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
         if (focusRef.current === 'orders') ordersSecRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -215,12 +209,12 @@ export default function AdminPage() {
     }
   }
 
-  // Hago que "Actualizado hace ..." cuente en vivo (sin cambiar tu API)
   const [tick, setTick] = useState(0)
   useEffect(() => {
     const id = setInterval(() => setTick(t => t + 1), 1000)
     return () => clearInterval(id)
   }, [])
+  
   const sinceText = (() => {
     if (!lastUpdated) return '—'
     const secs = Math.max(0, Math.floor((Date.now() - lastUpdated.getTime()) / 1000))
@@ -257,42 +251,73 @@ export default function AdminPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [me])
 
-  const filteredOrders = orders.filter(o => {
+  // Filtrar por tab y búsqueda
+  const getFilteredOrders = () => {
+    let tabFiltered = orders
+    
+    switch (activeTab) {
+      case 'pending':
+        tabFiltered = orders.filter(o => 
+          o.status === 'awaiting_proof' || o.status === 'pending' || o.status === 'rejected'
+        )
+        break
+      case 'review':
+        tabFiltered = orders.filter(o => o.status === 'under_review')
+        break
+      case 'completed':
+        tabFiltered = orders.filter(o => 
+          o.status === 'paid' || o.status === 'canceled'
+        )
+        break
+      case 'all':
+      default:
+        tabFiltered = orders
+    }
+
+    if (!filter.trim()) return tabFiltered
+    
     const q = filter.trim().toLowerCase()
-    if (!q) return true
-    return o.id.toLowerCase().includes(q) ||
-           o.email.toLowerCase().includes(q) ||
-           String(o.total_amount).includes(q)
-  })
-
-const filteredUsers = users.filter(u => {
-  const qRaw = userFilter.trim().toLowerCase()
-  if (!qRaw) return true
-
-  // Coincidencia por texto (nombre / email / DNI)
-  const textMatch =
-    (u.nombre || '').toLowerCase().includes(qRaw) ||
-    u.email.toLowerCase().includes(qRaw) ||
-    String(u.dni ?? '').toLowerCase().includes(qRaw)
-
-  // Extraer tokens numéricos del query (soporta "123", "12 34", "12,34", etc.)
-  const numTokens = qRaw
-    .split(/[\s,;]+/)
-    .map(t => t.trim())
-    .filter(Boolean)
-    .filter(t => /^\d+$/.test(t))
-
-  if (numTokens.length === 0) {
-    return textMatch
+    return tabFiltered.filter(o => 
+      o.id.toLowerCase().includes(q) ||
+      o.email.toLowerCase().includes(q) ||
+      String(o.total_amount).includes(q)
+    )
   }
 
-  // Si hay números en el query: alcanza con que alguno esté entre los números del usuario
-  const nums = numTokens.map(n => Number(n))
-  const numberMatch = nums.some(n => u.numeros.includes(n))
+  const filteredOrders = getFilteredOrders()
 
-  return textMatch || numberMatch
-})
+  // Contadores por estado
+  const statusCounts = {
+    all: orders.length,
+    pending: orders.filter(o => o.status === 'awaiting_proof' || o.status === 'pending' || o.status === 'rejected').length,
+    review: orders.filter(o => o.status === 'under_review').length,
+    completed: orders.filter(o => o.status === 'paid' || o.status === 'canceled').length,
+  }
 
+  const filteredUsers = users.filter(u => {
+    const qRaw = userFilter.trim().toLowerCase()
+    if (!qRaw) return true
+
+    const textMatch =
+      (u.nombre || '').toLowerCase().includes(qRaw) ||
+      u.email.toLowerCase().includes(qRaw) ||
+      String(u.dni ?? '').toLowerCase().includes(qRaw)
+
+    const numTokens = qRaw
+      .split(/[\s,;]+/)
+      .map(t => t.trim())
+      .filter(Boolean)
+      .filter(t => /^\d+$/.test(t))
+
+    if (numTokens.length === 0) {
+      return textMatch
+    }
+
+    const nums = numTokens.map(n => Number(n))
+    const numberMatch = nums.some(n => u.numeros.includes(n))
+
+    return textMatch || numberMatch
+  })
 
   const act = async (
     path: 'mark-paid' | 'reject' | 'cancel',
@@ -300,14 +325,30 @@ const filteredUsers = users.filter(u => {
     payload: Record<string, unknown> = {}
   ) => {
     if (!me) return
-    const res = await fetch(`/api/admin/${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: me.id, orderId, ...payload }),
-    })
-    const j = (await res.json()) as ActionResponse
-    if (!res.ok || j.error) { alert(j.error || 'Error'); return }
-    loadOverview(me.id, { silent: true })
+    
+    // Marcar como procesando
+    setProcessingOrder(orderId)
+    
+    try {
+      const res = await fetch(`/api/admin/${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: me.id, orderId, ...payload }),
+      })
+      const j = (await res.json()) as ActionResponse
+      if (!res.ok || j.error) { 
+        alert(j.error || 'Error')
+        return
+      }
+      
+      // Recargar órdenes
+      await loadOverview(me.id, { silent: true })
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Error')
+    } finally {
+      // Quitar el estado de procesando
+      setProcessingOrder(null)
+    }
   }
 
   if (loading) return <div className="max-w-6xl mx-auto p-6">Cargando dashboard…</div>
@@ -352,31 +393,106 @@ const filteredUsers = users.filter(u => {
         </div>
       </div>
 
-      {/* Filtro órdenes */}
-      <div className="bg-white border rounded-2xl p-4 flex items-center gap-3">
-        <input
-          value={filter}
-          onChange={e => setFilter(e.target.value)}
-          placeholder="Buscar por email, ID de orden o total…"
-          className="flex-1 border rounded-xl px-3 py-2"
-        />
-      </div>
-
-      {/* Órdenes */}
+      {/* Órdenes con Tabs */}
       <div className="bg-white border rounded-2xl p-4">
-        <h2 className="font-semibold mb-3">Órdenes recientes</h2>
-        <div className="overflow-x-auto">
+        <div className="mb-4">
+          <h2 className="font-semibold">Órdenes</h2>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-2 mb-4 border-b overflow-x-auto">
+          <button
+            onClick={() => setActiveTab('pending')}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === 'pending'
+                ? 'border-amber-500 text-amber-700'
+                : 'border-transparent text-gray-600 hover:text-gray-800'
+            }`}
+          >
+            Pendientes
+            {statusCounts.pending > 0 && (
+              <span className="ml-2 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold">
+                {statusCounts.pending}
+              </span>
+            )}
+          </button>
+          
+          <button
+            onClick={() => setActiveTab('review')}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === 'review'
+                ? 'border-sky-500 text-sky-700'
+                : 'border-transparent text-gray-600 hover:text-gray-800'
+            }`}
+          >
+            En revisión
+            {statusCounts.review > 0 && (
+              <span className="ml-2 px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 text-xs font-semibold">
+                {statusCounts.review}
+              </span>
+            )}
+          </button>
+          
+          <button
+            onClick={() => setActiveTab('completed')}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === 'completed'
+                ? 'border-emerald-500 text-emerald-700'
+                : 'border-transparent text-gray-600 hover:text-gray-800'
+            }`}
+          >
+            Completadas
+            
+          </button>
+          
+          <button
+            onClick={() => setActiveTab('all')}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === 'all'
+                ? 'border-gray-500 text-gray-700'
+                : 'border-transparent text-gray-600 hover:text-gray-800'
+            }`}
+          >
+            Todas
+          </button>
+        </div>
+
+        {/* Filtro de búsqueda */}
+        <div className="mb-4 flex items-center gap-3">
+          <input
+            value={filter}
+            onChange={e => setFilter(e.target.value)}
+            placeholder="Buscar por email, ID de orden o total…"
+            className="flex-1 border rounded-xl px-3 py-2"
+          />
+          {filter && (
+            <button
+              onClick={() => setFilter('')}
+              className="text-sm text-gray-500 hover:text-gray-700"
+            >
+              Limpiar
+            </button>
+          )}
+        </div>
+
+        {/* Contador de resultados */}
+        <div className="mb-3 text-sm text-gray-600">
+          Mostrando {filteredOrders.length} orden{filteredOrders.length !== 1 ? 'es' : ''}
+        </div>
+
+        {/* Tabla */}
+        <div className="overflow-x-auto lg:overflow-x-visible">
           <table className="min-w-full text-sm">
             <thead>
-              <tr className="text-left">
-                <th className="p-2">Orden</th>
-                <th className="p-2">Usuario</th>
-                <th className="p-2">Contacto</th>
-                <th className="p-2">Números</th>
-                <th className="p-2">Total</th>
-                <th className="p-2">Estado</th>
-                <th className="p-2">Comprobante</th>
-                <th className="p-2">Acciones</th>
+              <tr className="text-left bg-gray-50">
+                <th className="p-3 min-w-[120px] lg:min-w-0">Orden</th>
+                <th className="p-3 min-w-[180px] lg:min-w-0">Usuario</th>
+                <th className="p-3 min-w-[100px] lg:min-w-0">Contacto</th>
+                {activeTab !== 'completed' && <th className="p-3 min-w-[80px] lg:min-w-0">Números</th>}
+                <th className="p-3 min-w-[100px] lg:min-w-0">Total</th>
+                <th className="p-3 min-w-[140px] lg:min-w-0">Estado</th>
+                <th className="p-3 min-w-[100px] lg:min-w-0">Comprobante</th>
+                <th className="p-3 min-w-[120px] lg:min-w-0">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -384,17 +500,17 @@ const filteredUsers = users.filter(u => {
                 const wa = waHrefFrom(o.phone)
                 const hasPhone = Boolean(o.phone && wa)
                 return (
-                  <tr key={o.id} className="border-t">
-                    <td className="p-2">
+                  <tr key={o.id} className="border-t hover:bg-gray-50">
+                    <td className="p-3">
                       {o.id.slice(0, 8)}…
-                      <div className="text-xs text-gray-500">{new Date(o.created_at).toLocaleString('es-AR')}</div>
+                      <div className="text-xs text-gray-500">
+                        {new Date(o.created_at).toLocaleString('es-AR')}
+                      </div>
                     </td>
-                    <td className="p-2">{o.email}</td>
-
-                    {/* Contacto */}
-                    <td className="p-2">
+                    <td className="p-3">{o.email}</td>
+                    
+                    <td className="p-3">
                       <div className="flex gap-2">
-                        {/* WhatsApp */}
                         <a
                           href={hasPhone ? wa! : '#'}
                           target="_blank"
@@ -404,8 +520,6 @@ const filteredUsers = users.filter(u => {
                         >
                           <MessageCircle size={20} />
                         </a>
-
-                        {/* Teléfono */}
                         <a
                           href={o.phone ? `tel:${o.phone}` : '#'}
                           className={`text-blue-600 hover:text-blue-700 ${!o.phone ? 'pointer-events-none opacity-40' : ''}`}
@@ -416,34 +530,100 @@ const filteredUsers = users.filter(u => {
                       </div>
                     </td>
 
-                    <td className="p-2">{o.numbers.length}</td>
-                    <td className="p-2">${o.total_amount?.toLocaleString('es-AR')}</td>
-                    <td className="p-2">
-                      <span className={`px-2 py-1 rounded-lg text-xs ${STATUS_STYLE[o.status]}`}>
+                    {activeTab !== 'completed' && <td className="p-3">{o.numbers.length}</td>}
+                    <td className="p-3 whitespace-nowrap font-medium">
+                      ${o.total_amount?.toLocaleString('es-AR')}
+                    </td>
+                    
+                    <td className="p-3">
+                      <span className={`px-2.5 py-1 rounded-lg text-xs whitespace-nowrap inline-block ${STATUS_STYLE[o.status]}`}>
                         {STATUS_LABEL[o.status]}
                       </span>
                     </td>
-                    <td className="p-2">
-                      {o.proofUrl
-                        ? <a href={o.proofUrl} target="_blank" rel="noreferrer" className="underline">Ver</a>
-                        : <span className="text-gray-400">—</span>}
+                    
+                    <td className="p-3">
+                      {o.proofUrl ? (
+                        <a 
+                          href={o.proofUrl} 
+                          target="_blank" 
+                          rel="noreferrer" 
+                          className="text-blue-600 hover:underline"
+                        >
+                          Ver
+                        </a>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
                     </td>
-                    <td className="p-2">
-                      <div className="flex flex-wrap gap-2">
-                        {o.status !== 'paid' && o.status !== 'canceled' && (
-                          <>
-                            <button onClick={() => act('mark-paid', o.id)} className="px-2 py-1 rounded-lg bg-emerald-600 text-white">Acreditar</button>
-                            <button onClick={() => act('reject', o.id)} className="px-2 py-1 rounded-lg bg-amber-500 text-white">Rechazar</button>
-                            <button onClick={() => act('cancel', o.id)} className="px-2 py-1 rounded-lg bg-rose-600 text-white">Cancelar</button>
-                          </>
-                        )}
-                      </div>
+                    
+                    <td className="p-3">
+                      {o.status !== 'paid' && o.status !== 'canceled' && (
+                        <div className="flex flex-col gap-1.5">
+                          <button 
+                            onClick={() => act('mark-paid', o.id)} 
+                            disabled={processingOrder === o.id}
+                            className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs whitespace-nowrap hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                          >
+                            {processingOrder === o.id ? (
+                              <>
+                                <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                <span>Procesando...</span>
+                              </>
+                            ) : (
+                              'Acreditar'
+                            )}
+                          </button>
+                          <button 
+                            onClick={() => act('reject', o.id)} 
+                            disabled={processingOrder === o.id}
+                            className="px-3 py-1.5 rounded-lg bg-amber-500 text-white text-xs whitespace-nowrap hover:bg-amber-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                          >
+                            {processingOrder === o.id ? (
+                              <>
+                                <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                <span>Procesando...</span>
+                              </>
+                            ) : (
+                              'Rechazar'
+                            )}
+                          </button>
+                          <button 
+                            onClick={() => act('cancel', o.id)} 
+                            disabled={processingOrder === o.id}
+                            className="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-xs whitespace-nowrap hover:bg-rose-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                          >
+                            {processingOrder === o.id ? (
+                              <>
+                                <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                <span>Procesando...</span>
+                              </>
+                            ) : (
+                              'Cancelar'
+                            )}
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 )
               })}
               {filteredOrders.length === 0 && (
-                <tr><td className="p-4 text-center text-gray-500" colSpan={7}>No hay coincidencias</td></tr>
+                <tr>
+                  <td className="p-4 text-center text-gray-500" colSpan={activeTab !== 'completed' ? 8 : 7}>
+                    {filter 
+                      ? 'No hay coincidencias con tu búsqueda' 
+                      : 'No hay órdenes en esta categoría'}
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
@@ -533,7 +713,6 @@ const filteredUsers = users.filter(u => {
                       {detail.user.dni ? ` · DNI: ${detail.user.dni}` : ''}
                     </p>
 
-                    {/* Contacto en header del modal */}
                     <div className="mt-1 flex items-center gap-3">
                       {detail.user.phone ? (
                         <>

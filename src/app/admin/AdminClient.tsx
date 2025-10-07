@@ -93,6 +93,11 @@ export default function AdminPage() {
   const [users, setUsers] = useState<UserRow[]>([])
   const [userFilter, setUserFilter] = useState('')
 
+  const [resetPasswordOpen, setResetPasswordOpen] = useState(false)
+const [resetPasswordLoading, setResetPasswordLoading] = useState(false)
+const [resetPasswordForm, setResetPasswordForm] = useState({ email: '', password: '' })
+
+
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detail, setDetail] = useState<UserDetailResponse | null>(null)
@@ -124,6 +129,45 @@ export default function AdminPage() {
     const byId = new Map(usersData.map(u => [u.id, u.phone ?? null]))
     return ordersIn.map(o => ({ ...o, phone: byId.get(o.user_id) ?? null }))
   }
+
+  const handleResetPassword = async () => {
+  if (!me || !resetPasswordForm.email || !resetPasswordForm.password) {
+    alert('Por favor completá todos los campos')
+    return
+  }
+
+  if (resetPasswordForm.password.length < 6) {
+    alert('La contraseña debe tener al menos 6 caracteres')
+    return
+  }
+
+  setResetPasswordLoading(true)
+  try {
+    const res = await fetch('/api/admin/reset-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: me.id,
+        targetEmail: resetPasswordForm.email,
+        newPassword: resetPasswordForm.password,
+      }),
+    })
+
+    const data = await res.json()
+
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || 'Error al resetear contraseña')
+    }
+
+    alert(`✅ Contraseña actualizada para ${resetPasswordForm.email}`)
+    setResetPasswordOpen(false)
+    setResetPasswordForm({ email: '', password: '' })
+  } catch (e: unknown) {
+    alert(e instanceof Error ? e.message : 'Error al resetear contraseña')
+  } finally {
+    setResetPasswordLoading(false)
+  }
+}
 
   const loadOverview = async (userId: string, opts?: { silent?: boolean }) => {
     try {
@@ -631,71 +675,83 @@ export default function AdminPage() {
       </div>
 
       {/* Usuarios registrados */}
-      <div className="bg-white border rounded-2xl p-4">
-        <h2 className="font-semibold mb-3">Usuarios registrados</h2>
+<div className="bg-white border rounded-2xl p-4">
+  <h2 className="font-semibold mb-3">Usuarios registrados</h2>
 
-        <div className="mb-3 flex gap-3">
-          <input
-            value={userFilter}
-            onChange={e => setUserFilter(e.target.value)}
-            placeholder="Buscar por nombre, email, DNI o número..."
-            className="flex-1 border rounded-xl px-3 py-2"
-          />
-        </div>
+  <div className="mb-3 flex gap-3">
+    <input
+      value={userFilter}
+      onChange={e => setUserFilter(e.target.value)}
+      placeholder="Buscar por nombre, email, DNI o número..."
+      className="flex-1 border rounded-xl px-3 py-2"
+    />
+  </div>
 
-        <div className="overflow-x-auto max-h-[28rem] overflow-y-auto">
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr className="text-left">
-                <th className="p-2">Nombre</th>
-                <th className="p-2">Email</th>
-                <th className="p-2">Números</th>
-                <th className="p-2">Pendiente</th>
-                <th className="p-2">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredUsers.map(u => (
-                <tr key={u.id} className="border-t align-middle">
-                  <td className="p-2">{u.nombre ?? u.email.split('@')[0]}</td>
-                  <td className="p-2">{u.email}</td>
-                  <td className="p-2">
-                    <div className="flex items-center gap-2">
-                      <span className="inline-block rounded-lg border px-2 py-0.5 bg-amber-50">
-                        {u.numeros.length}
-                      </span>
-                      <button
-                        onClick={() => openDetail(u.id, 'numbers')}
-                        className="text-xs underline"
-                        title="Ver números"
-                      >
-                        Ver
-                      </button>
-                    </div>
-                  </td>
-                  <td className="p-2">
-                    {u.ordenesPendientes > 0
-                      ? <span className="text-amber-700 font-medium">{u.ordenesPendientes}</span>
-                      : <span className="text-gray-500">0</span>}
-                  </td>
-                  <td className="p-2">
-                    <button
-                      onClick={() => openDetail(u.id)}
-                      className="px-2 py-1 rounded-lg border"
-                      title="Ver detalle"
-                    >
-                      ⋮
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {filteredUsers.length === 0 && (
-                <tr><td className="p-4 text-center text-gray-500" colSpan={6}>No hay coincidencias</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+  <div className="overflow-x-auto max-h-[28rem] overflow-y-auto">
+    <table className="min-w-full text-sm">
+      <thead>
+        <tr className="text-left">
+          <th className="p-2">Nombre</th>
+          <th className="p-2">Email</th>
+          <th className="p-2">Números</th>
+          <th className="p-2">Pendiente</th>
+          <th className="p-2">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {filteredUsers.map(u => (
+          <tr key={u.id} className="border-t align-middle">
+            <td className="p-2">{u.nombre ?? u.email.split('@')[0]}</td>
+            <td className="p-2">{u.email}</td>
+            <td className="p-2">
+              <div className="flex items-center gap-2">
+                <span className="inline-block rounded-lg border px-2 py-0.5 bg-amber-50">
+                  {u.numeros.length}
+                </span>
+                <button
+                  onClick={() => openDetail(u.id, 'numbers')}
+                  className="text-xs underline"
+                  title="Ver números"
+                >
+                  Ver
+                </button>
+              </div>
+            </td>
+            <td className="p-2">
+              {u.ordenesPendientes > 0
+                ? <span className="text-amber-700 font-medium">{u.ordenesPendientes}</span>
+                : <span className="text-gray-500">0</span>}
+            </td>
+            <td className="p-2">
+              <div className="flex gap-2">
+                <button
+                  onClick={() => openDetail(u.id)}
+                  className="px-2 py-1 rounded-lg border hover:bg-gray-50"
+                  title="Ver detalle"
+                >
+                  ⋮
+                </button>
+                <button
+                  onClick={() => {
+                    setResetPasswordForm({ email: u.email, password: '' })
+                    setResetPasswordOpen(true)
+                  }}
+                  className="px-2 py-1 rounded-lg border hover:bg-blue-50 text-blue-600 text-xs"
+                  title="Resetear contraseña"
+                >
+                  🔑
+                </button>
+              </div>
+            </td>
+          </tr>
+        ))}
+        {filteredUsers.length === 0 && (
+          <tr><td className="p-4 text-center text-gray-500" colSpan={6}>No hay coincidencias</td></tr>
+        )}
+      </tbody>
+    </table>
+  </div>
+</div>
 
       {/* Modal Detalle de Usuario */}
       {detailOpen && (
@@ -841,6 +897,91 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+      {/* Modal Reset de Contraseña */}
+{resetPasswordOpen && (
+  <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold">Resetear contraseña</h3>
+        <button
+          onClick={() => {
+            setResetPasswordOpen(false)
+            setResetPasswordForm({ email: '', password: '' })
+          }}
+          className="text-gray-500 hover:text-gray-700"
+        >
+          ✕
+        </button>
+      </div>
+
+      <form onSubmit={(e) => { e.preventDefault(); handleResetPassword(); }} className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Email del usuario</label>
+          <input
+            type="email"
+            value={resetPasswordForm.email}
+            onChange={(e) => setResetPasswordForm({ ...resetPasswordForm, email: e.target.value })}
+            className="w-full border rounded-xl p-3 bg-gray-50"
+            placeholder="usuario@ejemplo.com"
+            required
+            disabled
+          />
+          <p className="text-xs text-gray-500 mt-1">Este campo no es editable</p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Nueva contraseña</label>
+          <input
+            type="text"
+            value={resetPasswordForm.password}
+            onChange={(e) => setResetPasswordForm({ ...resetPasswordForm, password: e.target.value })}
+            className="w-full border rounded-xl p-3 font-mono"
+            placeholder="Nueva contraseña"
+            required
+            minLength={6}
+          />
+          <p className="text-xs text-gray-500 mt-1">Mínimo 6 caracteres. Compartila con el usuario por WhatsApp.</p>
+        </div>
+
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+          <p className="text-xs text-amber-800">
+            ⚠️ <strong>Importante:</strong> Esta contraseña será visible para vos. Compartila con el usuario de forma segura (ej: WhatsApp).
+          </p>
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setResetPasswordOpen(false)
+              setResetPasswordForm({ email: '', password: '' })
+            }}
+            className="flex-1 px-4 py-2 rounded-xl border hover:bg-gray-50"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            disabled={resetPasswordLoading}
+            className="flex-1 px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {resetPasswordLoading ? (
+              <>
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>Procesando...</span>
+              </>
+            ) : (
+              'Resetear contraseña'
+            )}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
     </div>
   )
 }

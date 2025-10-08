@@ -104,6 +104,7 @@ function CheckoutPageInner() {
   const [profile, setProfile] = useState<{ id: string; email: string } | null>(null)
   const [orderId, setOrderId] = useState<string | null>(null)
   const [orderStatus, setOrderStatus] = useState<OrderStatus>('awaiting_proof')
+  const [orderCreatedAt, setOrderCreatedAt] = useState<string | null>(null)
   const [numbers, setNumbers] = useState<number[]>([])
   const [total, setTotal] = useState<number>(0)
   const [pricePer, setPricePer] = useState<number>(PRICE_FALLBACK)
@@ -115,6 +116,39 @@ function CheckoutPageInner() {
   const [uploading, setUploading] = useState(false)
   const [file, setFile] = useState<File | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
+
+  // Timer countdown
+  const [timeLeft, setTimeLeft] = useState<string>('')
+
+  useEffect(() => {
+    if (!orderCreatedAt) return
+
+    const calculateTimeLeft = () => {
+      const created = new Date(orderCreatedAt).getTime()
+      const now = Date.now()
+      const oneHour = 60 * 60 * 1000
+      const expires = created + oneHour
+      const remaining = expires - now
+
+      if (remaining <= 0) {
+        return 'Tiempo expirado'
+      }
+
+      const minutes = Math.floor(remaining / 60000)
+      const seconds = Math.floor((remaining % 60000) / 1000)
+      return `${minutes}m ${seconds}s`
+    }
+
+    // Calcular inmediatamente
+    setTimeLeft(calculateTimeLeft())
+
+    // Actualizar cada segundo
+    const interval = setInterval(() => {
+      setTimeLeft(calculateTimeLeft())
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [orderCreatedAt])
 
   useEffect(() => {
     ;(async () => {
@@ -135,7 +169,7 @@ function CheckoutPageInner() {
       if (existingOrderId) {
         const { data: ord, error: ordErr } = await supa
           .from('orders')
-          .select('id,user_id,status,total_amount,price_per_number')
+          .select('id,user_id,status,total_amount,price_per_number,created_at')
           .eq('id', existingOrderId)
           .single()
         if (ordErr || !ord) { alert('Orden no encontrada'); router.replace('/app'); return }
@@ -149,6 +183,7 @@ function CheckoutPageInner() {
 
         setOrderId(ord.id)
         setOrderStatus((ord.status as OrderStatus) || 'awaiting_proof')
+        setOrderCreatedAt(ord.created_at)
         setNumbers(list)
         setTotal(ord.total_amount || list.length * (ord.price_per_number || PRICE_FALLBACK))
         setPricePer(ord.price_per_number || PRICE_FALLBACK)
@@ -173,6 +208,7 @@ function CheckoutPageInner() {
 
       setOrderId(j.orderId as string)
       setOrderStatus('awaiting_proof')
+      setOrderCreatedAt(new Date().toISOString())
       setNumbers((j.numbers as number[]).slice().sort((a,b)=>a-b))
       setTotal(j.total as number)
       setPricePer((j.price as number) || PRICE_FALLBACK)
@@ -265,6 +301,30 @@ function CheckoutPageInner() {
         </p>
       </header>
 
+      {/* Alerta de tiempo límite */}
+      {canUpload && !isClosed && timeLeft && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+          <div className="flex-shrink-0">
+            <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div className="flex-1">
+            <h3 className="text-sm font-semibold text-red-800 mb-1">⏱️ Tiempo restante para subir el comprobante</h3>
+            <p className="text-sm text-red-700">
+              {timeLeft === 'Tiempo expirado' ? (
+                <span className="font-bold">⚠️ Tu orden ha expirado. Los números fueron liberados.</span>
+              ) : (
+                <>
+                  Te quedan <span className="font-bold font-mono">{timeLeft}</span> para subir tu comprobante.
+                  Si no lo hacés, tu orden se cancelará automáticamente.
+                </>
+              )}
+            </p>
+          </div>
+        </div>
+      )}
+
       <section className="space-y-2">
         <p className="text-xs sm:text-sm font-medium">Números ({numbers.length}):</p>
         <div className="flex flex-wrap gap-1.5 sm:gap-2">
@@ -323,6 +383,23 @@ function CheckoutPageInner() {
           >
             {uploading ? 'Subiendo…' : 'Enviar comprobante'}
           </button>
+
+          {/* Instrucciones de ayuda */}
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 space-y-2">
+            <h4 className="text-xs font-semibold text-blue-900 flex items-center gap-1">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              ¿Cómo subir tu comprobante?
+            </h4>
+            <ul className="text-xs text-blue-800 space-y-1 pl-5 list-disc">
+              <li>Tomá una <b>captura de pantalla</b> o <b>foto</b> del comprobante de transferencia</li>
+              <li>Asegurate de que se vea claramente el <b>monto</b>, <b>fecha</b> y <b>destinatario</b></li>
+              <li>También podés exportar el comprobante en formato <b>PDF</b> desde tu app bancaria</li>
+              <li>Si tenés problemas, contactanos por <b>WhatsApp</b></li>
+            </ul>
+          </div>
+
           <p className="text-xs text-gray-600">En 24 h se acreditarán los números.</p>
         </section>
       )}
@@ -360,7 +437,7 @@ function CheckoutPageInner() {
 
           {orderStatus === 'under_review' && (
             <p className="text-xs text-gray-600">
-              En revisión. Un admin confirmará dentro de 24 h.
+              En revisión. Un admin confirmará tu comprobante.
             </p>
           )}
 

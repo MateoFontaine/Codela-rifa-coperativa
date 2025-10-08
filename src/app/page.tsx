@@ -109,7 +109,7 @@ export default function HomePage() {
           <div className="mt-10 max-w-2xl mx-auto">
             <div className="relative aspect-[4/3] rounded-3xl overflow-hidden shadow-2xl border-4 border-white ring-4 ring-blue-200">
               <Image
-                src="/camisetaFirmada.png"
+                src="/CamisetaFirmada.png"
                 alt="Camiseta Argentina firmada por los campeones"
                 fill
                 className="object-cover"

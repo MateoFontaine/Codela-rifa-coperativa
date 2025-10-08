@@ -149,7 +149,7 @@ export default function HomePage() {
           <div className="w-full md:w-1/2">
             <div className="relative aspect-[4/3] w-full overflow-hidden rounded-xl md:rounded-2xl border bg-white">
               <Image
-                src="/camiseta.jpeg"
+                src="/Messi.jpeg"
                 alt="Camiseta de la Selección Argentina firmada por los jugadores"
                 fill
                 className="object-cover"

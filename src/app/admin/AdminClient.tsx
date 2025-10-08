@@ -53,6 +53,13 @@ type UserDetailResponse = {
   }>
 }
 
+type ConfirmAction = {
+  type: 'mark-paid' | 'reject' | 'cancel'
+  orderId: string
+  orderEmail: string
+  orderTotal: number
+}
+
 const STATUS_LABEL: Record<Status, string> = {
   awaiting_proof: 'sin comprobante',
   under_review: 'En revisión',
@@ -71,6 +78,32 @@ const STATUS_STYLE: Record<Status, string> = {
   pending: 'bg-zinc-50 text-zinc-700 border border-zinc-200',
 }
 
+const ACTION_CONFIG: Record<ConfirmAction['type'], { 
+  title: string
+  message: string
+  confirmText: string
+  confirmClass: string
+}> = {
+  'mark-paid': {
+    title: '¿Acreditar pago?',
+    message: 'Esta orden se marcará como pagada y los números quedarán confirmados.',
+    confirmText: 'Sí, acreditar',
+    confirmClass: 'bg-emerald-600 hover:bg-emerald-700 text-white'
+  },
+  'reject': {
+    title: '¿Rechazar orden?',
+    message: 'El comprobante será rechazado y el usuario deberá subir uno nuevo.',
+    confirmText: 'Sí, rechazar',
+    confirmClass: 'bg-amber-500 hover:bg-amber-600 text-white'
+  },
+  'cancel': {
+    title: '¿Cancelar orden?',
+    message: 'Esta orden se cancelará y los números volverán a estar disponibles.',
+    confirmText: 'Sí, cancelar',
+    confirmClass: 'bg-rose-600 hover:bg-rose-700 text-white'
+  }
+}
+
 export default function AdminPage() {
   const supa = useMemo(() => supabaseBrowser(), [])
   const router = useRouter()
@@ -84,19 +117,23 @@ export default function AdminPage() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [filter, setFilter] = useState('')
   
-  // Estado para tracking de acciones en proceso
   const [processingOrder, setProcessingOrder] = useState<string | null>(null)
+  
+  // Estado para el modal de confirmación
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null)
 
-  // Tab state
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'review' | 'completed'>('pending')
+
+  // Scroll infinito
+  const [displayLimit, setDisplayLimit] = useState(50)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   const [users, setUsers] = useState<UserRow[]>([])
   const [userFilter, setUserFilter] = useState('')
 
   const [resetPasswordOpen, setResetPasswordOpen] = useState(false)
-const [resetPasswordLoading, setResetPasswordLoading] = useState(false)
-const [resetPasswordForm, setResetPasswordForm] = useState({ email: '', password: '' })
-
+  const [resetPasswordLoading, setResetPasswordLoading] = useState(false)
+  const [resetPasswordForm, setResetPasswordForm] = useState({ email: '', password: '' })
 
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailLoading, setDetailLoading] = useState(false)
@@ -131,43 +168,43 @@ const [resetPasswordForm, setResetPasswordForm] = useState({ email: '', password
   }
 
   const handleResetPassword = async () => {
-  if (!me || !resetPasswordForm.email || !resetPasswordForm.password) {
-    alert('Por favor completá todos los campos')
-    return
-  }
-
-  if (resetPasswordForm.password.length < 6) {
-    alert('La contraseña debe tener al menos 6 caracteres')
-    return
-  }
-
-  setResetPasswordLoading(true)
-  try {
-    const res = await fetch('/api/admin/reset-password', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: me.id,
-        targetEmail: resetPasswordForm.email,
-        newPassword: resetPasswordForm.password,
-      }),
-    })
-
-    const data = await res.json()
-
-    if (!res.ok || !data.ok) {
-      throw new Error(data.error || 'Error al resetear contraseña')
+    if (!me || !resetPasswordForm.email || !resetPasswordForm.password) {
+      alert('Por favor completá todos los campos')
+      return
     }
 
-    alert(`✅ Contraseña actualizada para ${resetPasswordForm.email}`)
-    setResetPasswordOpen(false)
-    setResetPasswordForm({ email: '', password: '' })
-  } catch (e: unknown) {
-    alert(e instanceof Error ? e.message : 'Error al resetear contraseña')
-  } finally {
-    setResetPasswordLoading(false)
+    if (resetPasswordForm.password.length < 6) {
+      alert('La contraseña debe tener al menos 6 caracteres')
+      return
+    }
+
+    setResetPasswordLoading(true)
+    try {
+      const res = await fetch('/api/admin/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: me.id,
+          targetEmail: resetPasswordForm.email,
+          newPassword: resetPasswordForm.password,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || 'Error al resetear contraseña')
+      }
+
+      alert(`✅ Contraseña actualizada para ${resetPasswordForm.email}`)
+      setResetPasswordOpen(false)
+      setResetPasswordForm({ email: '', password: '' })
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Error al resetear contraseña')
+    } finally {
+      setResetPasswordLoading(false)
+    }
   }
-}
 
   const loadOverview = async (userId: string, opts?: { silent?: boolean }) => {
     try {
@@ -295,7 +332,6 @@ const [resetPasswordForm, setResetPasswordForm] = useState({ email: '', password
     return () => window.removeEventListener('keydown', onKey)
   }, [me])
 
-  // Filtrar por tab y búsqueda
   const getFilteredOrders = () => {
     let tabFiltered = orders
     
@@ -328,9 +364,32 @@ const [resetPasswordForm, setResetPasswordForm] = useState({ email: '', password
     )
   }
 
-  const filteredOrders = getFilteredOrders()
+  const allFilteredOrders = getFilteredOrders()
+  const filteredOrders = allFilteredOrders.slice(0, displayLimit)
+  const hasMore = allFilteredOrders.length > displayLimit
 
-  // Contadores por estado
+  // Scroll infinito - detectar cuando llega al final
+  useEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = container
+      // Si está a 100px del final, cargar más
+      if (scrollHeight - scrollTop - clientHeight < 100 && hasMore) {
+        setDisplayLimit(prev => prev + 50)
+      }
+    }
+
+    container.addEventListener('scroll', handleScroll)
+    return () => container.removeEventListener('scroll', handleScroll)
+  }, [hasMore])
+
+  // Reset displayLimit cuando cambia el tab o filtro
+  useEffect(() => {
+    setDisplayLimit(50)
+  }, [activeTab, filter])
+
   const statusCounts = {
     all: orders.length,
     pending: orders.filter(o => o.status === 'awaiting_proof' || o.status === 'pending' || o.status === 'rejected').length,
@@ -363,21 +422,27 @@ const [resetPasswordForm, setResetPasswordForm] = useState({ email: '', password
     return textMatch || numberMatch
   })
 
-  const act = async (
-    path: 'mark-paid' | 'reject' | 'cancel',
-    orderId: string,
-    payload: Record<string, unknown> = {}
-  ) => {
-    if (!me) return
+  // Función para abrir el modal de confirmación
+  const openConfirmModal = (type: ConfirmAction['type'], order: Order) => {
+    setConfirmAction({
+      type,
+      orderId: order.id,
+      orderEmail: order.email,
+      orderTotal: order.total_amount
+    })
+  }
+
+  // Función para ejecutar la acción confirmada
+  const executeAction = async () => {
+    if (!me || !confirmAction) return
     
-    // Marcar como procesando
-    setProcessingOrder(orderId)
+    setProcessingOrder(confirmAction.orderId)
     
     try {
-      const res = await fetch(`/api/admin/${path}`, {
+      const res = await fetch(`/api/admin/${confirmAction.type}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: me.id, orderId, ...payload }),
+        body: JSON.stringify({ userId: me.id, orderId: confirmAction.orderId }),
       })
       const j = (await res.json()) as ActionResponse
       if (!res.ok || j.error) { 
@@ -385,12 +450,11 @@ const [resetPasswordForm, setResetPasswordForm] = useState({ email: '', password
         return
       }
       
-      // Recargar órdenes
       await loadOverview(me.id, { silent: true })
+      setConfirmAction(null)
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : 'Error')
     } finally {
-      // Quitar el estado de procesando
       setProcessingOrder(null)
     }
   }
@@ -486,7 +550,6 @@ const [resetPasswordForm, setResetPasswordForm] = useState({ email: '', password
             }`}
           >
             Completadas
-            
           </button>
           
           <button
@@ -521,11 +584,11 @@ const [resetPasswordForm, setResetPasswordForm] = useState({ email: '', password
 
         {/* Contador de resultados */}
         <div className="mb-3 text-sm text-gray-600">
-          Mostrando {filteredOrders.length} orden{filteredOrders.length !== 1 ? 'es' : ''}
+          Mostrando {filteredOrders.length} de {allFilteredOrders.length} orden{allFilteredOrders.length !== 1 ? 'es' : ''}
         </div>
 
-        {/* Tabla */}
-        <div className="overflow-x-auto lg:overflow-x-visible">
+        {/* Tabla con scroll */}
+        <div ref={scrollContainerRef} className="overflow-x-auto lg:overflow-x-visible max-h-[600px] overflow-y-auto">
           <table className="min-w-full text-sm">
             <thead>
               <tr className="text-left bg-gray-50">
@@ -604,55 +667,25 @@ const [resetPasswordForm, setResetPasswordForm] = useState({ email: '', password
                       {o.status !== 'paid' && o.status !== 'canceled' && (
                         <div className="flex flex-col gap-1.5">
                           <button 
-                            onClick={() => act('mark-paid', o.id)} 
+                            onClick={() => openConfirmModal('mark-paid', o)}
                             disabled={processingOrder === o.id}
-                            className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs whitespace-nowrap hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                            className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs whitespace-nowrap hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            {processingOrder === o.id ? (
-                              <>
-                                <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
-                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                <span>Procesando...</span>
-                              </>
-                            ) : (
-                              'Acreditar'
-                            )}
+                            Acreditar
                           </button>
                           <button 
-                            onClick={() => act('reject', o.id)} 
+                            onClick={() => openConfirmModal('reject', o)}
                             disabled={processingOrder === o.id}
-                            className="px-3 py-1.5 rounded-lg bg-amber-500 text-white text-xs whitespace-nowrap hover:bg-amber-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                            className="px-3 py-1.5 rounded-lg bg-amber-500 text-white text-xs whitespace-nowrap hover:bg-amber-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            {processingOrder === o.id ? (
-                              <>
-                                <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
-                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                <span>Procesando...</span>
-                              </>
-                            ) : (
-                              'Rechazar'
-                            )}
+                            Rechazar
                           </button>
                           <button 
-                            onClick={() => act('cancel', o.id)} 
+                            onClick={() => openConfirmModal('cancel', o)}
                             disabled={processingOrder === o.id}
-                            className="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-xs whitespace-nowrap hover:bg-rose-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                            className="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-xs whitespace-nowrap hover:bg-rose-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            {processingOrder === o.id ? (
-                              <>
-                                <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
-                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                <span>Procesando...</span>
-                              </>
-                            ) : (
-                              'Cancelar'
-                            )}
+                            Cancelar
                           </button>
                         </div>
                       )}
@@ -671,87 +704,150 @@ const [resetPasswordForm, setResetPasswordForm] = useState({ email: '', password
               )}
             </tbody>
           </table>
+          
+          {/* Indicador de carga al final */}
+          {hasMore && (
+            <div className="py-4 text-center text-sm text-gray-500">
+              <div className="inline-flex items-center gap-2">
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>Cargando más órdenes...</span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Usuarios registrados */}
-<div className="bg-white border rounded-2xl p-4">
-  <h2 className="font-semibold mb-3">Usuarios registrados</h2>
+      <div className="bg-white border rounded-2xl p-4">
+        <h2 className="font-semibold mb-3">Usuarios registrados</h2>
 
-  <div className="mb-3 flex gap-3">
-    <input
-      value={userFilter}
-      onChange={e => setUserFilter(e.target.value)}
-      placeholder="Buscar por nombre, email, DNI o número..."
-      className="flex-1 border rounded-xl px-3 py-2"
-    />
-  </div>
+        <div className="mb-3 flex gap-3">
+          <input
+            value={userFilter}
+            onChange={e => setUserFilter(e.target.value)}
+            placeholder="Buscar por nombre, email, DNI o número..."
+            className="flex-1 border rounded-xl px-3 py-2"
+          />
+        </div>
 
-  <div className="overflow-x-auto max-h-[28rem] overflow-y-auto">
-    <table className="min-w-full text-sm">
-      <thead>
-        <tr className="text-left">
-          <th className="p-2">Nombre</th>
-          <th className="p-2">Email</th>
-          <th className="p-2">Números</th>
-          <th className="p-2">Pendiente</th>
-          <th className="p-2">Acciones</th>
-        </tr>
-      </thead>
-      <tbody>
-        {filteredUsers.map(u => (
-          <tr key={u.id} className="border-t align-middle">
-            <td className="p-2">{u.nombre ?? u.email.split('@')[0]}</td>
-            <td className="p-2">{u.email}</td>
-            <td className="p-2">
-              <div className="flex items-center gap-2">
-                <span className="inline-block rounded-lg border px-2 py-0.5 bg-amber-50">
-                  {u.numeros.length}
-                </span>
-                <button
-                  onClick={() => openDetail(u.id, 'numbers')}
-                  className="text-xs underline"
-                  title="Ver números"
-                >
-                  Ver
-                </button>
+        <div className="overflow-x-auto max-h-[28rem] overflow-y-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="text-left">
+                <th className="p-2">Nombre</th>
+                <th className="p-2">Email</th>
+                <th className="p-2">Números</th>
+                <th className="p-2">Pendiente</th>
+                <th className="p-2">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredUsers.map(u => (
+                <tr key={u.id} className="border-t align-middle">
+                  <td className="p-2">{u.nombre ?? u.email.split('@')[0]}</td>
+                  <td className="p-2">{u.email}</td>
+                  <td className="p-2">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-block rounded-lg border px-2 py-0.5 bg-amber-50">
+                        {u.numeros.length}
+                      </span>
+                      <button
+                        onClick={() => openDetail(u.id, 'numbers')}
+                        className="text-xs underline"
+                        title="Ver números"
+                      >
+                        Ver
+                      </button>
+                    </div>
+                  </td>
+                  <td className="p-2">
+                    {u.ordenesPendientes > 0
+                      ? <span className="text-amber-700 font-medium">{u.ordenesPendientes}</span>
+                      : <span className="text-gray-500">0</span>}
+                  </td>
+                  <td className="p-2">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => openDetail(u.id)}
+                        className="px-2 py-1 rounded-lg border hover:bg-gray-50"
+                        title="Ver detalle"
+                      >
+                        ⋮
+                      </button>
+                      <button
+                        onClick={() => {
+                          setResetPasswordForm({ email: u.email, password: '' })
+                          setResetPasswordOpen(true)
+                        }}
+                        className="px-2 py-1 rounded-lg border hover:bg-blue-50 text-blue-600 text-xs"
+                        title="Resetear contraseña"
+                      >
+                        🔑
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {filteredUsers.length === 0 && (
+                <tr><td className="p-4 text-center text-gray-500" colSpan={6}>No hay coincidencias</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Modal de Confirmación */}
+      {confirmAction && (
+        <div className="fixed inset-0 top-0 left-0 right-0 bottom-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
+            <h3 className="text-lg font-bold mb-3">
+              {ACTION_CONFIG[confirmAction.type].title}
+            </h3>
+            
+            <div className="mb-4 space-y-2">
+              <p className="text-gray-700">
+                {ACTION_CONFIG[confirmAction.type].message}
+              </p>
+              
+              <div className="bg-gray-50 rounded-xl p-3 text-sm space-y-1">
+                <div><span className="font-medium">Usuario:</span> {confirmAction.orderEmail}</div>
+                <div><span className="font-medium">Total:</span> ${confirmAction.orderTotal.toLocaleString('es-AR')}</div>
+                <div className="text-xs text-gray-500">ID: {confirmAction.orderId.slice(0, 8)}...</div>
               </div>
-            </td>
-            <td className="p-2">
-              {u.ordenesPendientes > 0
-                ? <span className="text-amber-700 font-medium">{u.ordenesPendientes}</span>
-                : <span className="text-gray-500">0</span>}
-            </td>
-            <td className="p-2">
-              <div className="flex gap-2">
-                <button
-                  onClick={() => openDetail(u.id)}
-                  className="px-2 py-1 rounded-lg border hover:bg-gray-50"
-                  title="Ver detalle"
-                >
-                  ⋮
-                </button>
-                <button
-                  onClick={() => {
-                    setResetPasswordForm({ email: u.email, password: '' })
-                    setResetPasswordOpen(true)
-                  }}
-                  className="px-2 py-1 rounded-lg border hover:bg-blue-50 text-blue-600 text-xs"
-                  title="Resetear contraseña"
-                >
-                  🔑
-                </button>
-              </div>
-            </td>
-          </tr>
-        ))}
-        {filteredUsers.length === 0 && (
-          <tr><td className="p-4 text-center text-gray-500" colSpan={6}>No hay coincidencias</td></tr>
-        )}
-      </tbody>
-    </table>
-  </div>
-</div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmAction(null)}
+                disabled={processingOrder !== null}
+                className="flex-1 px-4 py-2.5 rounded-xl border hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+              >
+                No, cancelar
+              </button>
+              <button
+                onClick={executeAction}
+                disabled={processingOrder !== null}
+                className={`flex-1 px-4 py-2.5 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium flex items-center justify-center gap-2 ${ACTION_CONFIG[confirmAction.type].confirmClass}`}
+              >
+                {processingOrder ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Procesando...</span>
+                  </>
+                ) : (
+                  ACTION_CONFIG[confirmAction.type].confirmText
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Detalle de Usuario */}
       {detailOpen && (
@@ -897,91 +993,92 @@ const [resetPasswordForm, setResetPasswordForm] = useState({ email: '', password
           </div>
         </div>
       )}
+
       {/* Modal Reset de Contraseña */}
-{resetPasswordOpen && (
-  <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-    <div className="bg-white rounded-2xl p-6 w-full max-w-md">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold">Resetear contraseña</h3>
-        <button
-          onClick={() => {
-            setResetPasswordOpen(false)
-            setResetPasswordForm({ email: '', password: '' })
-          }}
-          className="text-gray-500 hover:text-gray-700"
-        >
-          ✕
-        </button>
-      </div>
+      {resetPasswordOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Resetear contraseña</h3>
+              <button
+                onClick={() => {
+                  setResetPasswordOpen(false)
+                  setResetPasswordForm({ email: '', password: '' })
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
 
-      <form onSubmit={(e) => { e.preventDefault(); handleResetPassword(); }} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium mb-1">Email del usuario</label>
-          <input
-            type="email"
-            value={resetPasswordForm.email}
-            onChange={(e) => setResetPasswordForm({ ...resetPasswordForm, email: e.target.value })}
-            className="w-full border rounded-xl p-3 bg-gray-50"
-            placeholder="usuario@ejemplo.com"
-            required
-            disabled
-          />
-          <p className="text-xs text-gray-500 mt-1">Este campo no es editable</p>
-        </div>
+            <form onSubmit={(e) => { e.preventDefault(); handleResetPassword(); }} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Email del usuario</label>
+                <input
+                  type="email"
+                  value={resetPasswordForm.email}
+                  onChange={(e) => setResetPasswordForm({ ...resetPasswordForm, email: e.target.value })}
+                  className="w-full border rounded-xl p-3 bg-gray-50"
+                  placeholder="usuario@ejemplo.com"
+                  required
+                  disabled
+                />
+                <p className="text-xs text-gray-500 mt-1">Este campo no es editable</p>
+              </div>
 
-        <div>
-          <label className="block text-sm font-medium mb-1">Nueva contraseña</label>
-          <input
-            type="text"
-            value={resetPasswordForm.password}
-            onChange={(e) => setResetPasswordForm({ ...resetPasswordForm, password: e.target.value })}
-            className="w-full border rounded-xl p-3 font-mono"
-            placeholder="Nueva contraseña"
-            required
-            minLength={6}
-          />
-          <p className="text-xs text-gray-500 mt-1">Mínimo 6 caracteres. Compartila con el usuario por WhatsApp.</p>
-        </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Nueva contraseña</label>
+                <input
+                  type="text"
+                  value={resetPasswordForm.password}
+                  onChange={(e) => setResetPasswordForm({ ...resetPasswordForm, password: e.target.value })}
+                  className="w-full border rounded-xl p-3 font-mono"
+                  placeholder="Nueva contraseña"
+                  required
+                  minLength={6}
+                />
+                <p className="text-xs text-gray-500 mt-1">Mínimo 6 caracteres. Compartila con el usuario por WhatsApp.</p>
+              </div>
 
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
-          <p className="text-xs text-amber-800">
-            ⚠️ <strong>Importante:</strong> Esta contraseña será visible para vos. Compartila con el usuario de forma segura (ej: WhatsApp).
-          </p>
-        </div>
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                <p className="text-xs text-amber-800">
+                  ⚠️ <strong>Importante:</strong> Esta contraseña será visible para vos. Compartila con el usuario de forma segura (ej: WhatsApp).
+                </p>
+              </div>
 
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              setResetPasswordOpen(false)
-              setResetPasswordForm({ email: '', password: '' })
-            }}
-            className="flex-1 px-4 py-2 rounded-xl border hover:bg-gray-50"
-          >
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            disabled={resetPasswordLoading}
-            className="flex-1 px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            {resetPasswordLoading ? (
-              <>
-                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                <span>Procesando...</span>
-              </>
-            ) : (
-              'Resetear contraseña'
-            )}
-          </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setResetPasswordOpen(false)
+                    setResetPasswordForm({ email: '', password: '' })
+                  }}
+                  className="flex-1 px-4 py-2 rounded-xl border hover:bg-gray-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={resetPasswordLoading}
+                  className="flex-1 px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {resetPasswordLoading ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <span>Procesando...</span>
+                    </>
+                  ) : (
+                    'Resetear contraseña'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      </form>
-    </div>
-  </div>
-)}
+      )}
     </div>
   )
 }

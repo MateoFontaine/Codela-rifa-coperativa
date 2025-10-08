@@ -207,7 +207,7 @@ export default function HomePage() {
                 Gracias a su vínculo con alguien que trabaja en la Asociación
                 del Fútbol Argentino, este abuelo logró conseguir una verdadera
                 joya: una camiseta de la Selección Argentina. Pero no
-                cualquiera: tenía que estar firmada por todos los jugadores,
+                cualquiera: tenía que estar firmada por varios jugadores de la seleccion,
                 incluyendo nada menos que la firma del capitán, Lionel Messi. La
                 consiguió. Y la donó. Así, sin más.
               </p>
@@ -221,7 +221,7 @@ export default function HomePage() {
                 Hoy, esa camiseta no es solo una prenda de colección: es un
                 símbolo de amor, de compromiso y de confianza. Es original,
                 auténtica, y está firmada por muchos de los campeones del mundo
-                —incluida la firma de Messi—. Pero, sobre todo, está cargada de
+                (incluida la firma de Messi). Pero, sobre todo, está cargada de
                 un valor mucho más profundo: el de una comunidad que apuesta por
                 la educación y por un futuro mejor para sus chicos.
               </p>

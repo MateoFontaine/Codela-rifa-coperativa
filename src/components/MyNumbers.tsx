@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabaseBrowser } from '@/lib/supabase'
 
+const formatNumber = (n: number) => String(n).padStart(5, '0')
+
 export default function MyNumbers({ userId }: { userId?: string | null }) {
   const supa = useMemo(() => supabaseBrowser(), [])
   const [loading, setLoading] = useState(true)
@@ -44,7 +46,7 @@ export default function MyNumbers({ userId }: { userId?: string | null }) {
           <p className="text-sm text-gray-600 mb-2">Acreditados ({nums.length}):</p>
           <div className="max-h-40 overflow-auto flex flex-wrap gap-2">
             {nums.map(n => (
-              <span key={n} className="px-2 py-1 rounded-lg bg-emerald-100 border text-sm">{n}</span>
+              <span key={n} className="px-2 py-1 rounded-lg bg-emerald-100 border text-sm">{formatNumber(n)}</span>
             ))}
           </div>
         </>

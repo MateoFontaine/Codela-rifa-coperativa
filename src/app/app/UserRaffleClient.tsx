@@ -54,7 +54,7 @@ export default function UserRaffle() {
   // tabs para mobile
   const [activeTab, setActiveTab] = useState<'comprar' | 'cuenta'>('comprar')
 
-  // 🔥 NUEVO: Estado para tracking de botones de azar en proceso
+  // Estado para tracking de botones de azar en proceso
   const [loadingRandom, setLoadingRandom] = useState<number | null>(null)
 
   // Variable para saber si está bloqueado
@@ -285,7 +285,6 @@ export default function UserRaffle() {
 
   const emptyCart = () => releaseMany([...cart])
 
-  // 🔥 MODIFICADO: Agregar spinner durante la carga
   const pickRandomAll = async (qty: number) => {
     if (!profile) return
     if (isBlocked) {
@@ -298,7 +297,6 @@ export default function UserRaffle() {
       return
     }
 
-    // Marcar como cargando
     setLoadingRandom(qty)
 
     try {
@@ -335,7 +333,6 @@ export default function UserRaffle() {
     } catch (error) {
       alert('Error al seleccionar números al azar')
     } finally {
-      // Quitar el estado de cargando
       setLoadingRandom(null)
     }
   }
@@ -353,7 +350,6 @@ export default function UserRaffle() {
     window.location.href = `/checkout?n=${qs}`
   }
  
-  // 🔥 NUEVO: Componente de botón con spinner
   const RandomButton = ({ qty, disabled }: { qty: number; disabled: boolean }) => {
     const isLoading = loadingRandom === qty
     
@@ -719,7 +715,7 @@ export default function UserRaffle() {
                           r
                         )} disabled:opacity-60`}
                       >
-                        {r.id}
+                        {formatNumber(r.id)}
                       </button>
                     )
                   })}

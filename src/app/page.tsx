@@ -1,41 +1,153 @@
-// src/app/page.tsx
+"use client";
 import Image from "next/image";
 import Link from "next/link";
+import { useState, useEffect } from "react";
 
 export default function HomePage() {
+  // Fecha del sorteo - Navidad 2025 (ajustá según necesites)
+  const sorteoDate = new Date('2025-12-25T00:00:00');
+  
+  const [timeLeft, setTimeLeft] = useState({
+    days: 0,
+    hours: 0,
+    minutes: 0,
+    seconds: 0
+  });
+
+  useEffect(() => {
+    const calculateTimeLeft = () => {
+      const now = new Date();
+      const difference = sorteoDate.getTime() - now.getTime();
+
+      if (difference > 0) {
+        return {
+          days: Math.floor(difference / (1000 * 60 * 60 * 24)),
+          hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
+          minutes: Math.floor((difference / 1000 / 60) % 60),
+          seconds: Math.floor((difference / 1000) % 60)
+        };
+      }
+      return { days: 0, hours: 0, minutes: 0, seconds: 0 };
+    };
+
+    // Calcular inmediatamente
+    setTimeLeft(calculateTimeLeft());
+
+    // Actualizar cada segundo
+    const timer = setInterval(() => {
+      setTimeLeft(calculateTimeLeft());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
   return (
     <main className="min-h-screen bg-white">
-      {/* HERO */}
-      <section className="bg-gradient-to-b from-zinc-50 to-white border-b">
-        <div className="max-w-6xl mx-auto px-4 py-16 md:py-24">
-          <div className="max-w-3xl">
-            <span className="inline-block px-2.5 py-1 text-xs rounded-full border bg-white">
-              Rifa cooperativa
+      {/* HERO RENOVADO */}
+      <section className="relative bg-gradient-to-br from-blue-50 via-white to-blue-50 border-b overflow-hidden">
+        {/* Elementos decorativos */}
+        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-100 rounded-full blur-3xl opacity-30"></div>
+        <div className="absolute bottom-0 left-0 w-96 h-96 bg-cyan-100 rounded-full blur-3xl opacity-20"></div>
+        
+        <div className="relative max-w-7xl mx-auto px-4 py-8 md:py-12">
+          {/* Badge */}
+          <div className="text-center mb-6">
+            <span className="inline-block px-4 py-2 text-sm font-semibold rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow-lg">
+              🏆 Rifa Cooperativa Solidaria
             </span>
-            <h1 className="mt-4 text-3xl md:text-5xl font-bold leading-tight">
-              Participá por una camiseta de la Selección Argentina{" "}
-              <span className="whitespace-nowrap">firmada por el plantel</span>{" "}
-              (incluye la firma de Messi)
+          </div>
+
+          {/* Título Principal */}
+          <div className="text-center max-w-4xl mx-auto">
+            <h1 className="text-4xl md:text-6xl font-black leading-tight bg-gradient-to-r from-blue-600 via-cyan-500 to-blue-600 bg-clip-text text-transparent">
+              ¡VIVÍ LA PASIÓN MUNDIALISTA EN TU CASA! 🇦🇷
             </h1>
-            <p className="mt-4 text-zinc-600 max-w-2xl">
-              Elegís tus números, subís el comprobante y listo. Todo
-              transparente y súper simple.
+            
+            <p className="mt-6 text-xl md:text-2xl font-bold text-gray-800">
+              Participá de esta rifa única y llevate la camiseta oficial del Seleccionado Argentino,{' '}
+              <span className="text-blue-600">¡FIRMADA POR LOS CAMPEONES DEL MUNDO 2022!</span> 🏆🔥
             </p>
 
-            <div className="mt-8 flex flex-wrap gap-3">
+            <p className="mt-6 text-lg md:text-xl text-gray-700 max-w-3xl mx-auto">
+              💙⚽️ Imaginá colgarla en tu living, llevarla a la cancha o guardarla como el tesoro más valioso: 
+              una oportunidad única para cumplir el sueño de vestirte como un/a campeón/a 🏆
+            </p>
+          </div>
+
+          {/* Countdown Timer */}
+          <div className="mt-10 max-w-2xl mx-auto">
+            <div className="bg-white rounded-2xl shadow-2xl border-2 border-blue-200 p-6">
+              <div className="text-center mb-4">
+                <p className="text-lg font-bold text-gray-800">
+                  ⏱️ ¡Tenés tiempo hasta el sorteo!
+                </p>
+                <p className="text-sm text-gray-600 mt-1">Sorteo: 25 de Diciembre 2025</p>
+              </div>
+              
+              <div className="grid grid-cols-4 gap-3">
+                <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-4 text-white text-center">
+                  <div className="text-3xl md:text-4xl font-black">{timeLeft.days}</div>
+                  <div className="text-xs md:text-sm font-medium mt-1">DÍAS</div>
+                </div>
+                <div className="bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl p-4 text-white text-center">
+                  <div className="text-3xl md:text-4xl font-black">{timeLeft.hours}</div>
+                  <div className="text-xs md:text-sm font-medium mt-1">HORAS</div>
+                </div>
+                <div className="bg-gradient-to-br from-blue-400 to-blue-500 rounded-xl p-4 text-white text-center">
+                  <div className="text-3xl md:text-4xl font-black">{timeLeft.minutes}</div>
+                  <div className="text-xs md:text-sm font-medium mt-1">MIN</div>
+                </div>
+                <div className="bg-gradient-to-br from-cyan-400 to-cyan-500 rounded-xl p-4 text-white text-center">
+                  <div className="text-3xl md:text-4xl font-black">{timeLeft.seconds}</div>
+                  <div className="text-xs md:text-sm font-medium mt-1">SEG</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Imagen de la Camiseta */}
+          <div className="mt-10 max-w-2xl mx-auto">
+            <div className="relative aspect-[4/3] rounded-3xl overflow-hidden shadow-2xl border-4 border-white ring-4 ring-blue-200">
+              <Image
+                src="/camisetaFirmada.png"
+                alt="Camiseta Argentina firmada por los campeones"
+                fill
+                className="object-cover"
+                priority
+              />
+              <div className="absolute top-4 right-4 bg-yellow-400 text-black px-4 py-2 rounded-full font-bold text-sm shadow-lg">
+                ⭐ FIRMADA POR MESSI
+              </div>
+            </div>
+          </div>
+
+          {/* CTA Principal */}
+          <div className="mt-10 text-center">
+            <p className="text-lg font-semibold text-gray-700 mb-4">
+              👉 Participar es fácil, rápido y divertido. ¡Comprá tus números y cruzá los dedos, que la Scaloneta puede ser tuya! 🇦🇷💫
+            </p>
+            
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
               <Link
                 href="/app"
-                className="px-5 py-3 rounded-xl bg-black text-white hover:opacity-90"
+                className="group relative px-8 py-5 rounded-2xl bg-gradient-to-r from-blue-600 via-cyan-500 to-blue-600 text-white font-black text-xl shadow-2xl hover:shadow-blue-500/50 transition-all duration-300 hover:scale-105"
               >
-                Ver números y comprar
+                <span className="relative z-10">🎟️ QUIERO MIS NÚMEROS</span>
+                <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-blue-700 via-cyan-600 to-blue-700 opacity-0 group-hover:opacity-100 transition-opacity"></div>
               </Link>
+              
               <Link
                 href="/auth/register"
-                className="px-5 py-3 rounded-xl border hover:bg-zinc-50"
+                className="px-8 py-5 rounded-2xl border-2 border-blue-600 text-blue-600 font-bold text-lg hover:bg-blue-50 transition-all duration-300"
               >
-                Crear cuenta
+                📝 Crear Cuenta Gratis
               </Link>
             </div>
+
+            <p className="mt-6 text-sm text-gray-600">
+              💰 Cada número: <span className="font-bold text-blue-600 text-lg">$1.000</span> · 
+              ✅ Pago por transferencia · ⚡ Confirmación inmediata
+            </p>
           </div>
         </div>
       </section>
@@ -45,13 +157,11 @@ export default function HomePage() {
         <div className="flex items-center justify-between gap-6 flex-col md:flex-row">
           <div className="w-full md:w-1/2">
             <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl border bg-white">
-              {/* Reemplazá /camiseta.jpg por tu foto real (colocala en /public/camiseta.jpg) */}
               <Image
                 src="/camiseta.jpeg"
                 alt="Camiseta de la Selección Argentina firmada por los jugadores"
                 fill
                 className="object-cover"
-                priority
               />
             </div>
           </div>
@@ -72,11 +182,11 @@ export default function HomePage() {
               WhatsApp).
             </p>
             <Link
-              href="/app"
-              className="inline-block mt-6 px-5 py-3 rounded-xl bg-black text-white hover:opacity-90"
-            >
-              Quiero participar
-            </Link>
+  href="/app"
+  className="inline-block mt-6 px-5 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white hover:opacity-90 shadow-lg transition-all"
+>
+  Quiero participar
+</Link>
           </div>
         </div>
       </section>
@@ -142,10 +252,6 @@ export default function HomePage() {
                   Lo recaudado se destina a mejoras y proyectos de la escuela.
                 </p>
               </div>
-              {/* Si querés, podés sumar una foto acá */}
-              {/* <div className="mt-4 relative aspect-[4/3] rounded-2xl border overflow-hidden">
-          <Image src="/camiseta.jpg" alt="Camiseta firmada" fill className="object-cover" />
-        </div> */}
             </aside>
           </div>
         </div>
@@ -153,16 +259,14 @@ export default function HomePage() {
 
       {/* CÓMO FUNCIONA EL SORTEO */}
       <section className="max-w-6xl mx-auto p-4 md:py-6 bg-zinc-50">
-
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <h2 className="text-2xl md:text-3xl font-semibold">
             ¿Cómo funciona el sorteo?
           </h2>
-        
         </div>
 
         <div className="mt-6 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-2xl border p-5">
+          <div className="rounded-2xl border p-5 bg-white">
             <div className="text-sm font-medium text-zinc-500">1) Elegí</div>
             <h3 className="mt-1 font-semibold">Tus números</h3>
             <p className="mt-2 text-sm text-zinc-600">
@@ -171,7 +275,7 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="rounded-2xl border p-5">
+          <div className="rounded-2xl border p-5 bg-white">
             <div className="text-sm font-medium text-zinc-500">2) Pagá</div>
             <h3 className="mt-1 font-semibold">Transferencia + comprobante</h3>
             <p className="mt-2 text-sm text-zinc-600">
@@ -180,7 +284,7 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="rounded-2xl border p-5">
+          <div className="rounded-2xl border p-5 bg-white">
             <div className="text-sm font-medium text-zinc-500">
               3) Acreditación
             </div>
@@ -191,7 +295,7 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="rounded-2xl border p-5">
+          <div className="rounded-2xl border p-5 bg-white">
             <div className="text-sm font-medium text-zinc-500">4) Sorteo</div>
             <h3 className="mt-1 font-semibold">Lotería Nacional (Navidad)</h3>
             <p className="mt-2 text-sm text-zinc-600">
@@ -203,17 +307,15 @@ export default function HomePage() {
         </div>
       </section>
 
-
-
       {/* PREGUNTAS FRECUENTES */}
-      <section className="border-t bg-zinc-50  rounded">
+      <section className="border-t bg-zinc-50 rounded">
         <div className="max-w-6xl mx-auto px-4 py-12 md:py-16">
           <h2 className="text-2xl md:text-3xl font-semibold">
             Preguntas frecuentes
           </h2>
 
           <div className="mt-6 grid gap-3 md:grid-cols-2">
-            <details className="rounded-2xl border p-4 group">
+            <details className="rounded-2xl border p-4 group bg-white">
               <summary className="cursor-pointer font-medium list-none">
                 ¿Cuánto sale cada número?
               </summary>
@@ -223,7 +325,7 @@ export default function HomePage() {
               </p>
             </details>
 
-            <details className="rounded-2xl border p-4 group">
+            <details className="rounded-2xl border p-4 group bg-white">
               <summary className="cursor-pointer font-medium list-none">
                 ¿Cómo pago y dónde subo el comprobante?
               </summary>
@@ -233,7 +335,7 @@ export default function HomePage() {
               </p>
             </details>
 
-            <details className="rounded-2xl border p-4 group">
+            <details className="rounded-2xl border p-4 group bg-white">
               <summary className="cursor-pointer font-medium list-none">
                 ¿Qué pasa si no subo el comprobante a tiempo?
               </summary>
@@ -243,7 +345,7 @@ export default function HomePage() {
               </p>
             </details>
 
-            <details className="rounded-2xl border p-4 group">
+            <details className="rounded-2xl border p-4 group bg-white">
               <summary className="cursor-pointer font-medium list-none">
                 ¿Cómo y cuándo se anuncia el ganador/a?
               </summary>
@@ -257,7 +359,7 @@ export default function HomePage() {
       </section>
 
       {/* CTA FINAL */}
-      <section className="bg-zinc-50 border-t ">
+      <section className="bg-zinc-50 border-t">
         <div className="max-w-6xl mx-auto px-4 py-12 md:py-16 text-center">
           <h2 className="text-2xl md:text-3xl font-semibold">
             ¿Listo para participar?
@@ -265,20 +367,20 @@ export default function HomePage() {
           <p className="mt-2 text-zinc-600">
             Registrate gratis y empezá a elegir tus números.
           </p>
-          <div className="mt-6 flex justify-center gap-3">
-            <Link
-              href="/auth/register"
-              className="px-5 py-3 rounded-xl bg-black text-white hover:opacity-90"
-            >
-              Crear cuenta
-            </Link>
-            <Link
-              href="/app"
-              className="px-5 py-3 rounded-xl border hover:bg-white"
-            >
-              Ver números
-            </Link>
-          </div>
+          <div className="mt-6 flex justify-center gap-3 flex-wrap">
+  <Link
+    href="/auth/register"
+    className="px-5 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white hover:opacity-90 shadow-lg transition-all"
+  >
+    Crear cuenta
+  </Link>
+  <Link
+    href="/app"
+    className="px-5 py-3 rounded-xl border-2 border-blue-500 text-blue-600 hover:bg-blue-50 transition-all"
+  >
+    Ver números
+  </Link>
+</div>
         </div>
       </section>
 

@@ -296,9 +296,7 @@ function CheckoutPageInner() {
     <div className="max-w-2xl mx-auto bg-white border rounded-2xl p-4 sm:p-6 shadow-sm space-y-4 sm:space-y-6">
       <header className="space-y-1">
         <h2 className="text-lg sm:text-xl font-semibold">Confirmar compra</h2>
-        <p className="text-xs sm:text-sm text-gray-600">
-          Tenés <b>1 hora</b> para subir el comprobante; si no, se cancelará la orden y se liberarán los números.
-        </p>
+        
       </header>
 
       {/* Alerta de tiempo límite */}
@@ -412,7 +410,7 @@ function CheckoutPageInner() {
               href={proofUrl} 
               target="_blank" 
               rel="noreferrer" 
-              className="inline-block px-3 py-2 text-xs sm:text-sm rounded-xl border hover:bg-gray-50"
+              className="inline-block px-3 py-2 mr-3 text-xs sm:text-sm rounded-xl border hover:bg-gray-50"
             >
               Ver comprobante
             </a>

@@ -60,7 +60,7 @@ export default function HomePage() {
           {/* Título Principal */}
           <div className="text-center max-w-4xl mx-auto">
             <h1 className="text-4xl md:text-6xl font-black leading-tight bg-gradient-to-r from-blue-600 via-cyan-500 to-blue-600 bg-clip-text text-transparent">
-              ¡VIVÍ LA PASIÓN MUNDIALISTA EN TU CASA! 🇦🇷
+              ¡VIVÍ LA PASIÓN MUNDIALISTA EN TU CASA!
             </h1>
             
             <p className="mt-6 text-xl md:text-2xl font-bold text-gray-800">

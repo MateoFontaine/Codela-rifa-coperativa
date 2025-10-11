@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 
 export default function HomePage() {
-  const sorteoDate = new Date('2025-12-25T00:00:00');
+  const sorteoDate = new Date('2025-12-24T00:00:00');
   
   const [timeLeft, setTimeLeft] = useState({
     days: 0,
@@ -77,7 +77,7 @@ export default function HomePage() {
       <p className="text-sm md:text-lg font-bold text-gray-800">
         ⏱️ ¡Tenés tiempo hasta el sorteo!
       </p>
-      <p className="text-xs md:text-sm text-gray-600 mt-1">Sorteo: 25 de Diciembre 2025</p>
+      <p className="text-xs md:text-sm text-gray-600 mt-1">Sorteo: 24 de Diciembre 2025</p>
     </div>
     
     <div className="grid grid-cols-4 gap-2 md:gap-3">
@@ -333,4 +333,5 @@ export default function HomePage() {
       </footer>
     </main>
   );
+
 }

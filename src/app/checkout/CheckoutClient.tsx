@@ -254,7 +254,7 @@ function CheckoutPageInner() {
 
       setProofUrl(pub.publicUrl)
       setOrderStatus('under_review')
-      alert('¡Comprobante recibido! En 24 h se acreditarán tus números.')
+      alert('¡Comprobante recibido! En breve lo estaremos revisando.')
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Error al subir comprobante'
       alert(msg)
@@ -397,8 +397,6 @@ function CheckoutPageInner() {
               <li>Si tenés problemas, contactanos por <b>WhatsApp</b></li>
             </ul>
           </div>
-
-          <p className="text-xs text-gray-600">En 24 h se acreditarán los números.</p>
         </section>
       )}
 

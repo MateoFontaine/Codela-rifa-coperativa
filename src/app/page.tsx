@@ -49,7 +49,7 @@ export default function HomePage() {
           {/* Badge */}
           <div className="text-center mb-4 md:mb-6">
             <span className="inline-block px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm font-semibold rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow-lg">
-              🏆 Rifa Cooperativa Solidaria
+              🏆 RIFA COOPERADORA ESCUELA N° 6 "MALVINAS ARGENTINAS " Pinamar
             </span>
           </div>
 
@@ -142,6 +142,39 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      <section className="bg-gradient-to-br from-sky-50 to-blue-100 py-16 px-4">
+  <div className="max-w-4xl mx-auto">
+    <div className="bg-white rounded-2xl shadow-xl p-8 md:p-12">
+      <div className="flex items-center gap-4 mb-6">
+        <div className="bg-sky-100 p-4 rounded-full">
+          <svg className="w-8 h-8 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+        </div>
+        <h2 className="text-3xl font-bold text-gray-900">Ordenanza Municipal</h2>
+      </div>
+      
+      <p className="text-gray-600 mb-8 text-lg">
+        Descargá la ordenanza completa que autoriza y regula la Rifa Cooperadora en nuestro municipio.
+      </p>
+      
+      <button 
+        onClick={() => window.open('/ordenanza.pdf', '_blank')}
+        className="bg-sky-500 hover:bg-sky-600 text-white font-semibold px-8 py-4 rounded-xl flex items-center gap-3 transition-all transform hover:scale-105 shadow-lg"
+      >
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        Descargar Ordenanza (PDF)
+      </button>
+      
+      <p className="text-sm text-gray-500 mt-4">
+        Formato PDF • Tamaño: 2.3 MB • Actualizado: Octubre 2025
+      </p>
+    </div>
+  </div>
+</section>
 
       {/* EL PREMIO */}
       <section className="max-w-6xl mx-auto px-4 py-8 md:py-12 lg:py-16">

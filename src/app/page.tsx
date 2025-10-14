@@ -260,8 +260,7 @@ export default function HomePage() {
               </p>
               <p>
                 ¿Y si esta historia también la escribís vos? Podés sumarte
-                comprando tu número y compartiendo el link con tus amigos. El
-                sorteo se realizará en Navidad, en ese sorteo tan importante…
+                comprando tu número y compartiendo el link con tus amigos. El sorteo  se hará a través de Lotería Provincial (Bs As), en ese sorteo tan importante…
                 porque esta iniciativa y tu aporte son como los sueños bien
                 sembrados: crecen con tiempo y amor.
               </p>
@@ -292,7 +291,7 @@ export default function HomePage() {
             { num: "1", title: "Elegí", subtitle: "Tus números", desc: "Entrá a la app, buscá y reservá. También podés sumar números al azar. Cada número cuesta $1.000." },
             { num: "2", title: "Pagá", subtitle: "Transferencia + comprobante", desc: "Tenés 1 hora para subir el comprobante desde el checkout. Si no, la reserva se libera automáticamente." },
             { num: "3", title: "Acreditación", subtitle: "Revisión del pago", desc: "Un admin revisa y acredita tu compra. Cuando esté aprobado, tus números quedan confirmados." },
-            { num: "4", title: "Sorteo", subtitle: "Lotería Nacional (Navidad)", desc: "El ganador/a se define por la Lotería Nacional en Navidad, según los resultados oficiales." }
+            { num: "4", title: "Sorteo", subtitle: "Lotería Provincial", desc: "El ganador/a se define por la Lotería Nacional en Navidad, según los resultados oficiales." }
           ].map((item) => (
             <div key={item.num} className="rounded-xl md:rounded-2xl border p-4 md:p-5 bg-white">
               <div className="text-xs md:text-sm font-medium text-zinc-500">{item.num}) {item.title}</div>

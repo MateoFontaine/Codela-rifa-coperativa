@@ -160,7 +160,7 @@ export default function HomePage() {
       </p>
       
       <button 
-        onClick={() => window.open('/ordenanza.pdf', '_blank')}
+        onClick={() => window.open('/Ordenanza.pdf', '_blank')}
         className="bg-sky-500 hover:bg-sky-600 text-white font-semibold px-8 py-4 rounded-xl flex items-center gap-3 transition-all transform hover:scale-105 shadow-lg"
       >
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -28,7 +28,7 @@ export default function Header() {
     <header className="border-b border-blue-200 bg-gradient-to-r from-blue-500 to-cyan-400 backdrop-blur sticky top-0 z-10 shadow-md">
       <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
         <Link href="/" className="font-bold text-white text-base sm:text-lg hover:opacity-90 transition-opacity flex-shrink-0">
-          Rifa Cooperativa
+          Rifa Cooperadora
         </Link>
 
         <nav className="flex items-center gap-2 text-xs sm:text-sm flex-shrink-0">

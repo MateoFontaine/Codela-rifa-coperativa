@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabaseBrowser } from '@/lib/supabase'
 import { Phone, MessageCircle } from "lucide-react";
+import type { RealtimeChannel } from '@supabase/supabase-js'
 
 type Status = 'awaiting_proof' | 'under_review' | 'paid' | 'rejected' | 'canceled' | 'pending'
 
@@ -119,12 +120,10 @@ export default function AdminPage() {
   
   const [processingOrder, setProcessingOrder] = useState<string | null>(null)
   
-  // Estado para el modal de confirmación
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null)
 
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'review' | 'completed'>('pending')
 
-  // Scroll infinito
   const [displayLimit, setDisplayLimit] = useState(50)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
@@ -141,6 +140,10 @@ export default function AdminPage() {
   const focusRef = useRef<'numbers' | 'orders' | null>(null)
   const numbersSecRef = useRef<HTMLDivElement | null>(null)
   const ordersSecRef = useRef<HTMLDivElement | null>(null)
+
+  // 👇 NUEVO: Estado para Realtime
+  const [realtimeStatus, setRealtimeStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting')
+  const channelRef = useRef<RealtimeChannel | null>(null)
 
   function waHrefFrom(raw?: string | null): string | null {
     if (!raw) return null
@@ -305,6 +308,70 @@ export default function AdminPage() {
     return `${m}m ${s}s`
   })()
 
+  // 👇 NUEVO: Setup de Realtime
+  useEffect(() => {
+    if (!me) return
+
+    console.log('📡 Iniciando Realtime...')
+
+    const channel = supa
+      .channel('admin-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'orders'
+        },
+        (payload) => {
+          console.log('📡 Realtime - Order cambió:', payload)
+          loadOverview(me.id, { silent: true })
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'payment_proofs'
+        },
+        (payload) => {
+          console.log('📡 Realtime - Comprobante cambió:', payload)
+          loadOverview(me.id, { silent: true })
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'raffle_numbers',
+          filter: 'status=eq.sold'
+        },
+        (payload) => {
+          console.log('📡 Realtime - Número vendido:', payload)
+          loadOverview(me.id, { silent: true })
+        }
+      )
+      .subscribe((status) => {
+        console.log('📡 Realtime status:', status)
+        if (status === 'SUBSCRIBED') {
+          setRealtimeStatus('connected')
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          setRealtimeStatus('disconnected')
+        } else {
+          setRealtimeStatus('connecting')
+        }
+      })
+
+    channelRef.current = channel
+
+    return () => {
+      console.log('📡 Realtime - Desconectando...')
+      channel.unsubscribe()
+    }
+  }, [me, supa])
+
   useEffect(() => {
     ;(async () => {
       const { data: u } = await supa.auth.getUser()
@@ -368,14 +435,12 @@ export default function AdminPage() {
   const filteredOrders = allFilteredOrders.slice(0, displayLimit)
   const hasMore = allFilteredOrders.length > displayLimit
 
-  // Scroll infinito - detectar cuando llega al final
   useEffect(() => {
     const container = scrollContainerRef.current
     if (!container) return
 
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = container
-      // Si está a 100px del final, cargar más
       if (scrollHeight - scrollTop - clientHeight < 100 && hasMore) {
         setDisplayLimit(prev => prev + 50)
       }
@@ -385,7 +450,6 @@ export default function AdminPage() {
     return () => container.removeEventListener('scroll', handleScroll)
   }, [hasMore])
 
-  // Reset displayLimit cuando cambia el tab o filtro
   useEffect(() => {
     setDisplayLimit(50)
   }, [activeTab, filter])
@@ -422,7 +486,6 @@ export default function AdminPage() {
     return textMatch || numberMatch
   })
 
-  // Función para abrir el modal de confirmación
   const openConfirmModal = (type: ConfirmAction['type'], order: Order) => {
     setConfirmAction({
       type,
@@ -432,7 +495,6 @@ export default function AdminPage() {
     })
   }
 
-  // Función para ejecutar la acción confirmada
   const executeAction = async () => {
     if (!me || !confirmAction) return
     
@@ -468,6 +530,20 @@ export default function AdminPage() {
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-semibold">Admin · Rifa</h1>
           <span className="text-xs text-gray-500">Actualizado hace {sinceText}</span>
+          
+          {/* 👇 NUEVO: Indicador de Realtime */}
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${
+              realtimeStatus === 'connected' ? 'bg-emerald-500' :
+              realtimeStatus === 'connecting' ? 'bg-amber-500 animate-pulse' :
+              'bg-rose-500'
+            }`} />
+            <span className="text-xs text-gray-500">
+              {realtimeStatus === 'connected' ? 'Tiempo real' :
+               realtimeStatus === 'connecting' ? 'Conectando...' :
+               'Desconectado'}
+            </span>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -719,6 +795,7 @@ export default function AdminPage() {
           )}
         </div>
       </div>
+    
 
       {/* Usuarios registrados */}
       <div className="bg-white border rounded-2xl p-4">
@@ -1082,4 +1159,3 @@ export default function AdminPage() {
     </div>
   )
 }
-/* Esto es para probar */

@@ -61,13 +61,13 @@ function CheckoutLoader() {
 
         {/* Texto animado */}
         <div className="text-center space-y-2">
-          <h3 className="text-lg sm:text-xl font-semibold text-gray-900">
-            Preparando tu compra
-          </h3>
-          <p className="text-sm sm:text-base text-gray-600 animate-pulse">
-            Estamos reservando tus números...
-          </p>
-        </div>
+  <h3 className="text-lg sm:text-xl font-semibold text-gray-900">
+    Cargando...
+  </h3>
+  <p className="text-sm sm:text-base text-gray-600 animate-pulse">
+    Un momento por favor
+  </p>
+</div>
 
         {/* Barra de progreso */}
         <div className="w-full max-w-md">
@@ -116,6 +116,10 @@ function CheckoutPageInner() {
   const [uploading, setUploading] = useState(false)
   const [file, setFile] = useState<File | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  
+  // Estados para las notas
+  const [notes, setNotes] = useState<string>('')
+  const [savingNote, setSavingNote] = useState(false)
 
   // Timer countdown
   const [timeLeft, setTimeLeft] = useState<string>('')
@@ -139,10 +143,8 @@ function CheckoutPageInner() {
       return `${minutes}m ${seconds}s`
     }
 
-    // Calcular inmediatamente
     setTimeLeft(calculateTimeLeft())
 
-    // Actualizar cada segundo
     const interval = setInterval(() => {
       setTimeLeft(calculateTimeLeft())
     }, 1000)
@@ -169,7 +171,7 @@ function CheckoutPageInner() {
       if (existingOrderId) {
         const { data: ord, error: ordErr } = await supa
           .from('orders')
-          .select('id,user_id,status,total_amount,price_per_number,created_at')
+          .select('id,user_id,status,total_amount,price_per_number,created_at,notes')
           .eq('id', existingOrderId)
           .single()
         if (ordErr || !ord) { alert('Orden no encontrada'); router.replace('/app'); return }
@@ -188,6 +190,7 @@ function CheckoutPageInner() {
         setTotal(ord.total_amount || list.length * (ord.price_per_number || PRICE_FALLBACK))
         setPricePer(ord.price_per_number || PRICE_FALLBACK)
         setProofUrl((pr as { file_url?: string } | null)?.file_url || null)
+        setNotes((ord as any).notes || '') // 👈 Cargar nota existente
         setLoading(false)
         return
       }
@@ -230,6 +233,31 @@ function CheckoutPageInner() {
     setFile(f)
   }
 
+  // 👇 NUEVO: Función para guardar nota
+  const saveNote = async () => {
+    if (!profile || !orderId) return
+    setSavingNote(true)
+    try {
+      const res = await fetch('/api/update-order-note', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: profile.id,
+          orderId,
+          notes: notes
+        })
+      })
+      const j = await res.json()
+      if (!res.ok) throw new Error(j?.error || 'No se pudo guardar la nota')
+      alert('✓ Nota guardada correctamente')
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Error al guardar nota'
+      alert(msg)
+    } finally {
+      setSavingNote(false)
+    }
+  }
+
   const uploadProof = async () => {
     if (!profile || !orderId || !file) return
     setUploading(true)
@@ -245,8 +273,12 @@ function CheckoutPageInner() {
       const res = await fetch('/api/upload-proof', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: profile.id, orderId, filePath: path,
-          publicUrl: pub.publicUrl, fileType: file.type, sizeBytes: file.size
+          userId: profile.id, 
+          orderId, 
+          filePath: path,
+          publicUrl: pub.publicUrl, 
+          fileType: file.type, 
+          sizeBytes: file.size
         })
       })
       const j = await res.json()
@@ -287,7 +319,6 @@ function CheckoutPageInner() {
   const showProofBlock = !!proofUrl
   const isClosed = orderStatus === 'paid' || orderStatus === 'canceled'
 
-  // Mostrar loader mientras carga
   if (loading) {
     return <CheckoutLoader />
   }
@@ -296,10 +327,8 @@ function CheckoutPageInner() {
     <div className="max-w-2xl mx-auto bg-white border rounded-2xl p-4 sm:p-6 shadow-sm space-y-4 sm:space-y-6">
       <header className="space-y-1">
         <h2 className="text-lg sm:text-xl font-semibold">Confirmar compra</h2>
-        
       </header>
 
-      {/* Alerta de tiempo límite */}
       {canUpload && !isClosed && timeLeft && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
           <div className="flex-shrink-0">
@@ -336,13 +365,81 @@ function CheckoutPageInner() {
         <p className="text-xs sm:text-sm">Total: <b>{totalFmt}</b></p>
       </section>
 
+      {/* 👇 NUEVO: Sección de nota */}
+      {!isClosed && (
+        <section className="rounded-xl border p-3 sm:p-4 space-y-3">
+          <h3 className="font-semibold text-sm sm:text-base">Nota o aclaración (opcional)</h3>
+          <p className="text-xs text-gray-600">
+            Dejá cualquier comentario sobre tu transferencia
+          </p>
+          
+          <div className="space-y-2">
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Ej: Transferí desde cuenta de mi hermano, el monto incluye comisión..."
+              maxLength={500}
+              rows={3}
+              className="w-full px-3 py-2 text-xs sm:text-sm border border-gray-300 rounded-xl focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none"
+            />
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-gray-500">
+                {notes.length}/500 caracteres
+              </p>
+              <button
+                onClick={saveNote}
+                disabled={savingNote}
+                className="px-4 py-2 text-xs sm:text-sm rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {savingNote ? 'Guardando...' : 'Guardar nota'}
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+
       <section className="rounded-xl border p-3 sm:p-4">
         <h3 className="font-semibold text-sm sm:text-base mb-2">Transferencia bancaria</h3>
-        <ul className="text-xs sm:text-sm space-y-1">
-          <li className="break-words">Alias: <b>{bank?.alias || '-'}</b></li>
-          <li className="break-words">CVU: <b>{bank?.cvu || '-'}</b></li>
+        <ul className="text-xs sm:text-sm space-y-2">
+          <li className="flex items-center justify-between gap-2">
+            <span className="break-words">Alias: <b>{bank?.alias || '-'}</b></span>
+            {bank?.alias && (
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(bank.alias)
+                  alert('Alias copiado al portapapeles')
+                }}
+                className="flex-shrink-0 px-2 py-1 text-xs rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-700 font-medium transition-colors flex items-center gap-1"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                Copiar
+              </button>
+            )}
+          </li>
+
+          <li className="flex items-center justify-between gap-2">
+            <span className="break-words">CVU: <b>{bank?.cvu || '-'}</b></span>
+            {bank?.cvu && (
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(bank.cvu)
+                  alert('CVU copiado al portapapeles')
+                }}
+                className="flex-shrink-0 px-2 py-1 text-xs rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-700 font-medium transition-colors flex items-center gap-1"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                Copiar
+              </button>
+            )}
+          </li>
+
           <li className="break-words">Titular: <b>{bank?.holder || '-'}</b></li>
         </ul>
+        
         {support?.whatsapp && (
           <a 
             href={`https://wa.me/${support.whatsapp.replace(/[^\d]/g,'')}`}
@@ -382,7 +479,6 @@ function CheckoutPageInner() {
             {uploading ? 'Subiendo…' : 'Enviar comprobante'}
           </button>
 
-          {/* Instrucciones de ayuda */}
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 space-y-2">
             <h4 className="text-xs font-semibold text-blue-900 flex items-center gap-1">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -461,13 +557,20 @@ function CheckoutPageInner() {
           )}
         </section>
       )}
+
+      {/* 👇 NUEVO: Mostrar nota si está cerrada la orden */}
+      {isClosed && notes && (
+        <section className="rounded-xl border p-3 sm:p-4 space-y-2">
+          <h3 className="font-semibold text-sm sm:text-base">Nota dejada</h3>
+          <p className="text-xs sm:text-sm text-gray-700 bg-gray-50 p-3 rounded-lg">
+            {notes}
+          </p>
+        </section>
+      )}
     </div>
   )
 }
 
-// ============================================
-// Export principal con Suspense
-// ============================================
 export default function CheckoutPage() {
   return (
     <Suspense fallback={<CheckoutLoader />}>

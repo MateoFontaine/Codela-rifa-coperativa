@@ -118,9 +118,11 @@ export default function SearchNumber({ total, pageSize, onGo }: Props) {
         value={val}
         onFocus={() => setOpen(true)}
         onChange={(e) => setVal(e.target.value.replace(/\D/g, ''))}
-        placeholder="Buscar número (ej: 1, 134, 5678)..."
+        placeholder="Buscar por número"
         className="w-full border rounded-xl p-3 text-base"
       />
+
+      
       
       {open && val && (
         <div className="absolute left-0 right-0 mt-1 bg-white border rounded-xl shadow-lg z-20 max-h-80 overflow-y-auto">
@@ -130,8 +132,8 @@ export default function SearchNumber({ total, pageSize, onGo }: Props) {
             </div>
           ) : results.length === 0 ? (
             <div className="px-3 py-4 text-center text-sm text-gray-500">
-              No se encontraron números que empiecen con "{val}"
-            </div>
+  No se encontraron números que terminen con "{val}"
+</div>
           ) : (
             <div className="py-1">
               {results.map((result) => (

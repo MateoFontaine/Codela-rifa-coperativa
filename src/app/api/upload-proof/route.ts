@@ -17,6 +17,7 @@ type Body = {
   publicUrl: string     // URL pública (dev) o firmada (prod)
   fileType?: string
   sizeBytes?: number
+  notes?: string | null  // 👈 NUEVO: Campo para notas
 }
 
 type OrderRow = {
@@ -28,7 +29,7 @@ type OrderRow = {
 
 export async function POST(req: Request) {
   try {
-    const { userId, orderId, filePath, publicUrl, fileType, sizeBytes } = (await req.json()) as Body
+    const { userId, orderId, filePath, publicUrl, fileType, sizeBytes, notes } = (await req.json()) as Body
     if (!userId || !orderId || !filePath || !publicUrl) {
       return NextResponse.json({ error: 'Faltan datos' }, { status: 400 })
     }
@@ -53,17 +54,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'La orden ya está cerrada' }, { status: 409 })
     }
 
-    // 2) Guardar/actualizar comprobante (único por orden)
+    // 2) Guardar/actualizar comprobante (único por orden) con notas
     const { error: upErr } = await admin
       .from('payment_proofs')
       .upsert(
         {
           order_id: orderId,
-          user_id: ord.user_id,   // si es NOT NULL en la tabla
+          user_id: ord.user_id,
           file_url: publicUrl,
           file_path: filePath,
           file_type: fileType ?? null,
           size_bytes: sizeBytes ?? null,
+          notes: notes ?? null,  // 👈 NUEVO: Guardamos las notas
+          uploaded_at: new Date().toISOString(),
         },
         { onConflict: 'order_id' }
       )

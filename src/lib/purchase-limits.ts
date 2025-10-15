@@ -21,6 +21,22 @@ export async function checkPurchaseLimits(
 ): Promise<PurchaseLimitCheck> {
   const admin = supabaseAdmin()
 
+  // 👇 NUEVO: Verificar si es vendedor
+  const { data: user } = await admin
+    .from('app_users')
+    .select('role, email')
+    .eq('id', userId)
+    .single()
+
+  // Si es vendedor, no tiene límites
+  if (user?.role === 'vendedor' || user?.email === 'vendedor@cooperadora.com') {
+    return {
+      canPurchase: true,
+      activePurchases: 0,
+      maxPurchases: 999, // Sin límites
+    }
+  }
+
   // 1. Validar cantidad de números
   if (numberCount > MAX_NUMBERS_PER_PURCHASE) {
     return {

@@ -32,13 +32,22 @@ export async function POST(req: Request) {
       .eq('status', 'held')
       .lt('hold_expires_at', nowIso)
 
-    // Buscar números que empiecen con el query
-    // Convertimos el id a texto para hacer la búsqueda
+    // Buscar números que terminen con el query
+    const queryNum = parseInt(query)
+    const modulo = Math.pow(10, query.length)
+    
+    // Generar lista de números que terminan con el query
+    // Por ejemplo si query es "123" y tenemos hasta 99999:
+    // Buscamos: 123, 1123, 2123, 3123... hasta encontrar suficientes
+    const idsToSearch: number[] = []
+    for (let i = queryNum; i <= 99999 && idsToSearch.length < limit * 2; i += modulo) {
+      idsToSearch.push(i)
+    }
+
     const { data, error } = await admin
       .from('raffle_numbers')
       .select('id, status, held_by, order_id')
-      .gte('id', parseInt(query))
-      .lt('id', parseInt(query + '9'.repeat(6 - query.length)))
+      .in('id', idsToSearch)
       .order('id', { ascending: true })
       .limit(limit)
 

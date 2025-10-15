@@ -50,7 +50,7 @@ export default function UserRaffle() {
 
   // búsqueda - cuando buscás un número específico
   const [searchTarget, setSearchTarget] = useState<number | null>(null)
-  const [searchMode, setSearchMode] = useState(false) // TRUE cuando estamos viendo resultados de búsqueda
+  const [searchMode, setSearchMode] = useState(false)
 
   // tabs para mobile
   const [activeTab, setActiveTab] = useState<'comprar' | 'cuenta'>('comprar')
@@ -108,7 +108,7 @@ export default function UserRaffle() {
 
   // Cargar números ALEATORIOS DISPONIBLES (grilla principal)
   useEffect(() => {
-    if (searchMode) return // No cargar si estamos en modo búsqueda
+    if (searchMode) return
     
     ;(async () => {
       setLoading(true)
@@ -131,7 +131,7 @@ export default function UserRaffle() {
       
       setLoading(false)
     })()
-  }, [page, searchMode]) // Se recarga cuando cambia page o searchMode
+  }, [page, searchMode])
 
   // Scroll al número buscado cuando termine de cargar
   useEffect(() => {
@@ -351,7 +351,6 @@ export default function UserRaffle() {
     setLoading(true)
     
     try {
-      // Buscar el número específico y algunos cercanos
       const { data, error } = await supa
         .from('raffle_numbers')
         .select('id,status,held_by,order_id')
@@ -372,7 +371,7 @@ export default function UserRaffle() {
 
   const backToRandomView = () => {
     setSearchMode(false)
-    setPage(page + 1) // Trigger reload con números aleatorios
+    setPage(page + 1)
   }
 
   const handleConfirmPurchase = () => {
@@ -434,234 +433,230 @@ export default function UserRaffle() {
         </div>
       </div>
 
-      {/* Desktop: Layout original con columnas */}
-      <div className="hidden lg:grid lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {/* Columna izquierda */}
-        <div className="space-y-6 lg:col-span-1">
-          {limitInfo && (
-            <div
-              className={`border rounded-2xl p-4 shadow-sm ${
-                limitInfo.canPurchase
-                  ? 'bg-emerald-50 border-emerald-200'
-                  : 'bg-rose-50 border-rose-200'
-              }`}
-            >
-              <h3 className="font-semibold mb-2 text-sm">Estado de compras</h3>
-              <div className="space-y-1 text-sm">
-                <p>
-                  Compras activas:{' '}
-                  <b>
-                    {limitInfo.activePurchases}/{limitInfo.maxPurchases}
-                  </b>
+{/* Desktop: Layout original con columnas */}
+<div className="hidden lg:grid lg:grid-cols-3 xl:grid-cols-4 gap-6">
+  {/* Columna izquierda */}
+  <div className="space-y-6 lg:col-span-1">
+    {limitInfo && (
+      <div
+        className={`border rounded-2xl p-4 shadow-sm ${
+          limitInfo.canPurchase
+            ? 'bg-emerald-50 border-emerald-200'
+            : 'bg-rose-50 border-rose-200'
+        }`}
+      >
+        <h3 className="font-semibold mb-2 text-sm">Estado de compras</h3>
+        <div className="space-y-1 text-sm">
+          <p>
+            Compras activas:{' '}
+            <b>
+              {limitInfo.activePurchases}/{limitInfo.maxPurchases}
+            </b>
+          </p>
+          {!limitInfo.canPurchase && limitInfo.reason && (
+            <>
+              <p className="text-rose-800 text-xs mt-2 font-medium">
+                ⚠️ {limitInfo.reason}
+              </p>
+              {limitInfo.activePurchases >= limitInfo.maxPurchases && (
+                <p className="text-rose-700 text-xs mt-1 font-semibold">
+                  No podés seleccionar más números hasta que se libere un cupo.
                 </p>
-                {!limitInfo.canPurchase && limitInfo.reason && (
-                  <>
-                    <p className="text-rose-800 text-xs mt-2 font-medium">
-                      ⚠️ {limitInfo.reason}
-                    </p>
-                    {limitInfo.activePurchases >= limitInfo.maxPurchases && (
-                      <p className="text-rose-700 text-xs mt-1 font-semibold">
-                        No podés seleccionar más números hasta que se libere un cupo.
-                      </p>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-
-          <MyNumbers userId={profile?.id} />
-
-          {/* Carrito */}
-          <div className="bg-white border rounded-2xl p-5 shadow-sm">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="font-semibold">Carrito</h3>
-              <span className="text-xs text-gray-500">
-                {cart.length}/{MAX_PER_ORDER} · {countdown || '--:--'}
-              </span>
-            </div>
-
-            {cart.length === 0 ? (
-              <p className="text-sm text-gray-600">No hay números en el carrito.</p>
-            ) : (
-              <>
-                {/* Total a pagar */}
-                <div className="mb-3 p-3 rounded-xl bg-blue-50 border border-blue-200">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-700">Total a pagar:</span>
-                    <span className="text-xl font-bold text-blue-600">
-                      ${(cart.length * 1000).toLocaleString('es-AR')}
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-600 mt-1">
-                    {cart.length} número{cart.length !== 1 ? 's' : ''} × $1.000
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap gap-2 mb-3 max-h-24 overflow-y-auto">
-                  {cart
-                    .slice()
-                    .sort((a, b) => a - b)
-                    .map((n) => (
-                      <button
-                        key={n}
-                        onClick={() => releaseOne(n)}
-                        className="text-sm px-2 py-1 rounded-lg bg-amber-100 border hover:bg-amber-200"
-                        title="Quitar del carrito"
-                      >
-                        {formatNumber(n)} <span className="ml-1">×</span>
-                      </button>
-                    ))}
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={emptyCart}
-                    className="px-3 py-2 rounded-xl border"
-                  >
-                    Vaciar
-                  </button>
-                  <button
-                    disabled={cart.length === 0}
-                    onClick={handleConfirmPurchase}
-                    className="px-3 py-2 rounded-xl bg-black text-white disabled:opacity-50"
-                  >
-                    Confirmar
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* Leyenda de colores */}
-          <div className="bg-white border rounded-2xl p-4 shadow-sm">
-            <h3 className="font-semibold mb-3 text-sm">Leyenda de colores</h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded bg-emerald-100 border"></div>
-                <span className="text-gray-700">Disponible</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded bg-amber-100 border"></div>
-                <span className="text-gray-700">Reservado (tuyo o de otros)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded bg-rose-100 border"></div>
-                <span className="text-gray-700">Vendido</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white border rounded-2xl p-5 shadow-sm">
-            <h3 className="font-semibold mb-3">
-              Acciones rápidas (al azar en toda la rifa)
-            </h3>
-            <div className="flex gap-2">
-              <RandomButton qty={1} disabled={isBlocked} />
-              <RandomButton qty={5} disabled={isBlocked} />
-              <RandomButton qty={10} disabled={isBlocked} />
-            </div>
-          </div>
-
-          <OrderHistory userId={profile?.id} />
-        </div>
-
-        {/* Derecha: buscador + grilla */}
-        <div className="lg:col-span-2 xl:col-span-3 space-y-4">
-          <div className="bg-white border rounded-2xl p-4 shadow-sm flex flex-col gap-3 sm:flex-row sm:items-center">
-            <SearchNumber
-              total={TOTAL_NUMBERS}
-              pageSize={PAGE_SIZE}
-              onGo={handleSearchGo}
-            />
-            <div className="sm:ml-auto flex items-center gap-2">
-              {searchMode ? (
-                <button
-                  onClick={backToRandomView}
-                  className="px-3 py-2 rounded-xl border flex items-center gap-2"
-                >
-                  ← Volver a aleatorios
-                </button>
-              ) : (
-                <>
-                  <button
-  onClick={() => setPage(page + 1)}
-  className="px-4 py-2.5 rounded-xl border border-gray-300 bg-white hover:bg-gray-50 flex items-center gap-2 transition-all hover:shadow-md"
->
-  <svg 
-    className="w-4 h-4" 
-    fill="none" 
-    stroke="currentColor" 
-    viewBox="0 0 24 24"
-  >
-    <path 
-      strokeLinecap="round" 
-      strokeLinejoin="round" 
-      strokeWidth={2} 
-      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" 
-    />
-  </svg>
-  <span className="font-medium text-sm">Mezclar números</span>
-</button>
-
-                </>
               )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 xl:grid-cols-12 gap-1.5 bg-white border rounded-2xl p-4 shadow-sm">
-            {loading
-              ? Array.from({ length: PAGE_SIZE }).map((_, i) => (
-                  <div
-                    key={i}
-                    className="h-9 md:h-10 rounded-lg bg-gray-100 animate-pulse"
-                  />
-                ))
-              : rows.map((r) => {
-                  const isMineHeld = r.status === 'held' && r.held_by === profile?.id
-                  const isLocked = !!r.order_id
-                  const disabled =
-                    isBlocked ||
-                    isLocked ||
-                    r.status === 'sold' ||
-                    (r.status === 'held' && !isMineHeld) ||
-                    (r.status === 'free' && cart.length >= MAX_PER_ORDER)
-
-                  return (
-                    <button
-                      key={r.id}
-                      id={`num-${r.id}`}
-                      onClick={() =>
-                        isLocked
-                          ? undefined
-                          : isMineHeld
-                          ? releaseOne(r.id)
-                          : pickOne(r.id)
-                      }
-                      disabled={disabled}
-                      className={`h-9 md:h-10 rounded-lg text-[11px] md:text-xs border ${colorFor(
-                        r
-                      )} disabled:opacity-60 disabled:cursor-not-allowed`}
-                      title={
-                        isBlocked
-                          ? 'Llegaste al límite de compras activas'
-                          : isLocked
-                          ? `#${formatNumber(r.id)} · en orden`
-                          : `#${formatNumber(r.id)} · ${r.status}${isMineHeld ? ' (tuyo)' : ''}`
-                      }
-                    >
-                      {formatNumber(r.id)}
-                    </button>
-                  )
-                })}
-          </div>
+            </>
+          )}
         </div>
       </div>
+    )}
 
-      {/* Mobile: Contenido según tab activo */}
+    <MyNumbers userId={profile?.id} />
+
+    {/* Carrito */}
+    <div className="bg-white border rounded-2xl p-5 shadow-sm">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="font-semibold">Carrito</h3>
+        <span className="text-xs text-gray-500">
+          {cart.length}/{MAX_PER_ORDER} · {countdown || '--:--'}
+        </span>
+      </div>
+
+      {cart.length === 0 ? (
+        <p className="text-sm text-gray-600">No hay números en el carrito.</p>
+      ) : (
+        <>
+          <div className="mb-3 p-3 rounded-xl bg-blue-50 border border-blue-200">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-700">Total a pagar:</span>
+              <span className="text-xl font-bold text-blue-600">
+                ${(cart.length * 1000).toLocaleString('es-AR')}
+              </span>
+            </div>
+            <p className="text-xs text-gray-600 mt-1">
+              {cart.length} número{cart.length !== 1 ? 's' : ''} × $1.000
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2 mb-3 max-h-24 overflow-y-auto">
+            {cart
+              .slice()
+              .sort((a, b) => a - b)
+              .map((n) => (
+                <button
+                  key={n}
+                  onClick={() => releaseOne(n)}
+                  className="text-sm px-2 py-1 rounded-lg bg-amber-100 border hover:bg-amber-200"
+                  title="Quitar del carrito"
+                >
+                  {formatNumber(n)} <span className="ml-1">×</span>
+                </button>
+              ))}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={emptyCart}
+              className="px-3 py-2 rounded-xl border"
+            >
+              Vaciar
+            </button>
+            <button
+              disabled={cart.length === 0}
+              onClick={handleConfirmPurchase}
+              className="px-3 py-2 rounded-xl bg-black text-white disabled:opacity-50"
+            >
+              Confirmar
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+
+    {/* 👇 Leyenda de colores */}
+    <div className="bg-white border rounded-2xl p-4 shadow-sm">
+      <h3 className="font-semibold mb-3 text-sm">Leyenda</h3>
+      <div className="space-y-2 text-sm">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded bg-emerald-100 border"></div>
+          <span className="text-gray-700">Disponible</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded bg-amber-100 border"></div>
+          <span className="text-gray-700">Reservado</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded bg-rose-100 border"></div>
+          <span className="text-gray-700">Vendido</span>
+        </div>
+      </div>
+    </div>
+
+    {/* 👇 Acciones rápidas */}
+    <div className="bg-white border rounded-2xl p-5 shadow-sm">
+      <h3 className="font-semibold mb-3">Acciones rápidas</h3>
+      <p className="text-xs text-gray-600 mb-3">Seleccionar al azar:</p>
+      <div className="flex gap-2">
+        <RandomButton qty={1} disabled={isBlocked} />
+        <RandomButton qty={5} disabled={isBlocked} />
+        <RandomButton qty={10} disabled={isBlocked} />
+      </div>
+    </div>
+  </div>
+
+  {/* Derecha: buscador + grilla + historial */}
+  <div className="lg:col-span-2 xl:col-span-3 space-y-4">
+    <div className="bg-white border rounded-2xl p-4 shadow-sm flex flex-col gap-3 sm:flex-row sm:items-center">
+      <SearchNumber
+        total={TOTAL_NUMBERS}
+        pageSize={PAGE_SIZE}
+        onGo={handleSearchGo}
+      />
+      <div className="sm:ml-auto flex items-center gap-2">
+        {searchMode ? (
+          <button
+            onClick={backToRandomView}
+            className="px-3 py-2 rounded-xl border flex items-center gap-2"
+          >
+            ← Volver a aleatorios
+          </button>
+        ) : (
+          <button
+            onClick={() => setPage(page + 1)}
+            className="px-4 py-2.5 rounded-xl border border-gray-300 bg-white hover:bg-gray-50 flex items-center gap-2 transition-all hover:shadow-md"
+          >
+            <svg 
+              className="w-4 h-4" 
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                strokeWidth={2} 
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" 
+              />
+            </svg>
+            <span className="font-medium text-sm">Mezclar números</span>
+          </button>
+        )}
+      </div>
+    </div>
+
+    <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 xl:grid-cols-12 gap-1.5 bg-white border rounded-2xl p-4 shadow-sm">
+      {loading
+        ? Array.from({ length: PAGE_SIZE }).map((_, i) => (
+            <div
+              key={i}
+              className="h-9 md:h-10 rounded-lg bg-gray-100 animate-pulse"
+            />
+          ))
+        : rows.map((r) => {
+            const isMineHeld = r.status === 'held' && r.held_by === profile?.id
+            const isLocked = !!r.order_id
+            const disabled =
+              isBlocked ||
+              isLocked ||
+              r.status === 'sold' ||
+              (r.status === 'held' && !isMineHeld) ||
+              (r.status === 'free' && cart.length >= MAX_PER_ORDER)
+
+            return (
+              <button
+                key={r.id}
+                id={`num-${r.id}`}
+                onClick={() =>
+                  isLocked
+                    ? undefined
+                    : isMineHeld
+                    ? releaseOne(r.id)
+                    : pickOne(r.id)
+                }
+                disabled={disabled}
+                className={`h-9 md:h-10 rounded-lg text-[11px] md:text-xs border ${colorFor(
+                  r
+                )} disabled:opacity-60 disabled:cursor-not-allowed`}
+                title={
+                  isBlocked
+                    ? 'Llegaste al límite de compras activas'
+                    : isLocked
+                    ? `#${formatNumber(r.id)} · en orden`
+                    : `#${formatNumber(r.id)} · ${r.status}${isMineHeld ? ' (tuyo)' : ''}`
+                }
+              >
+                {formatNumber(r.id)}
+              </button>
+            )
+          })}
+    </div>
+
+    {/* 👇 Historial abajo, ancho completo */}
+    <OrderHistory userId={profile?.id} />
+  </div>
+</div>
+
+      {/* Mobile: sin cambios */}
       <div className="lg:hidden space-y-4">
         {activeTab === 'comprar' && (
           <>
-            {/* Banner de límites */}
             {limitInfo && (
               <div
                 className={`border rounded-2xl p-4 shadow-sm ${
@@ -694,7 +689,6 @@ export default function UserRaffle() {
               </div>
             )}
 
-            {/* Carrito */}
             <div className="bg-white border rounded-2xl p-4 shadow-sm">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="font-semibold">Carrito</h3>
@@ -707,7 +701,6 @@ export default function UserRaffle() {
                 <p className="text-sm text-gray-600">No hay números en el carrito.</p>
               ) : (
                 <>
-                  {/* Total a pagar */}
                   <div className="mb-3 p-3 rounded-xl bg-blue-50 border border-blue-200">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-gray-700">Total a pagar:</span>
@@ -751,7 +744,6 @@ export default function UserRaffle() {
               )}
             </div>
 
-            {/* Leyenda de colores */}
             <div className="bg-white border rounded-2xl p-4 shadow-sm">
               <h3 className="font-semibold mb-3 text-sm">Leyenda</h3>
               <div className="flex flex-wrap gap-3 text-xs">
@@ -770,7 +762,6 @@ export default function UserRaffle() {
               </div>
             </div>
 
-            {/* Acciones rápidas */}
             <div className="bg-white border rounded-2xl p-4 shadow-sm">
               <h3 className="font-semibold mb-3">Acciones rápidas</h3>
               <div className="flex gap-2">
@@ -780,7 +771,6 @@ export default function UserRaffle() {
               </div>
             </div>
 
-            {/* Buscador */}
             <div className="bg-white border rounded-2xl p-4 shadow-sm">
               <SearchNumber
                 total={TOTAL_NUMBERS}
@@ -796,32 +786,29 @@ export default function UserRaffle() {
                     ← Volver a aleatorios
                   </button>
                 ) : (
-                  <>
-                    <button
-  onClick={() => setPage(page + 1)}
-  className="px-4 py-2.5 rounded-xl border border-gray-300 bg-white hover:bg-gray-50 flex items-center justify-center gap-2 transition-all"
->
-  <svg 
-    className="w-4 h-4" 
-    fill="none" 
-    stroke="currentColor" 
-    viewBox="0 0 24 24"
-  >
-    <path 
-      strokeLinecap="round" 
-      strokeLinejoin="round" 
-      strokeWidth={2} 
-      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" 
-    />
-  </svg>
-  <span className="font-medium text-sm">Mezclar</span>
-</button>
-                  </>
+                  <button
+                    onClick={() => setPage(page + 1)}
+                    className="px-4 py-2.5 rounded-xl border border-gray-300 bg-white hover:bg-gray-50 flex items-center justify-center gap-2 transition-all"
+                  >
+                    <svg 
+                      className="w-4 h-4" 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <path 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round" 
+                        strokeWidth={2} 
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" 
+                      />
+                    </svg>
+                    <span className="font-medium text-sm">Mezclar</span>
+                  </button>
                 )}
               </div>
             </div>
 
-            {/* Grilla de números */}
             <div className="grid grid-cols-5 gap-1.5 bg-white border rounded-2xl p-4 shadow-sm">
               {loading
                 ? Array.from({ length: PAGE_SIZE }).map((_, i) => (

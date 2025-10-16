@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { checkPurchaseLimits } from '@/lib/purchase-limits'
 
-type Body = { userId: string; numbers: number[]; notes?: string } // 👈 NUEVO: agregamos notes
+type Body = { userId: string; numbers: number[]; notes?: string }
 type OrderLite = {
   id: string
   user_id: string
@@ -31,7 +31,7 @@ async function sha256Hex(text: string) {
 
 export async function POST(req: Request) {
   try {
-    const { userId, numbers, notes } = (await req.json()) as Body // 👈 NUEVO: desestructuramos notes
+    const { userId, numbers, notes } = (await req.json()) as Body
     if (!userId || !Array.isArray(numbers) || numbers.length === 0) {
       return NextResponse.json({ error: 'Faltan datos' }, { status: 400 })
     }
@@ -61,7 +61,7 @@ export async function POST(req: Request) {
             hoursRemaining: limitCheck.hoursRemaining,
           },
         },
-        { status: 429 } // 429 = Too Many Requests
+        { status: 429 }
       )
     }
 
@@ -135,7 +135,6 @@ export async function POST(req: Request) {
         )
       }
 
-      // 👇 NUEVO: Actualizar notas si vienen en el request
       if (notes !== undefined) {
         await admin
           .from('orders')
@@ -149,9 +148,14 @@ export async function POST(req: Request) {
         .map((r) => r.id)
 
       if (attachIds.length) {
+        // 👇 CORREGIDO: Agregamos hold_expires_at: null
         await admin
           .from('raffle_numbers')
-          .update({ order_id: existingOrderId, updated_at: nowIso })
+          .update({ 
+            order_id: existingOrderId, 
+            hold_expires_at: null,  // 🔧 SOLUCIÓN
+            updated_at: nowIso 
+          })
           .in('id', attachIds)
           .eq('status', 'held')
           .eq('held_by', userId)
@@ -180,7 +184,6 @@ export async function POST(req: Request) {
 
     let orderId: string
 
-    // 👇 NUEVO: incluir notes al crear la orden
     const tryInsert = await admin
       .from('orders')
       .insert({
@@ -189,7 +192,7 @@ export async function POST(req: Request) {
         total_amount: ids.length * PRICE,
         price_per_number: PRICE,
         fingerprint,
-        notes: notes?.trim() || null, // 👈 NUEVO
+        notes: notes?.trim() || null,
       })
       .select('id')
       .single()
@@ -215,7 +218,6 @@ export async function POST(req: Request) {
       }
       orderId = (existing.data as { id: string }).id
       
-      // 👇 NUEVO: actualizar notas en orden existente
       if (notes !== undefined) {
         await admin
           .from('orders')
@@ -226,9 +228,14 @@ export async function POST(req: Request) {
       orderId = (tryInsert.data as { id: string }).id
     }
 
+    // 👇 CORREGIDO: Agregamos hold_expires_at: null
     await admin
       .from('raffle_numbers')
-      .update({ order_id: orderId, updated_at: nowIso })
+      .update({ 
+        order_id: orderId, 
+        hold_expires_at: null,  // 🔧 SOLUCIÓN
+        updated_at: nowIso 
+      })
       .in('id', ids)
       .eq('status', 'held')
       .eq('held_by', userId)

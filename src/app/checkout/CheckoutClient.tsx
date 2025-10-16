@@ -452,7 +452,7 @@ function CheckoutPageInner() {
         )}
       </section>
 
-      {!showProofBlock && canUpload && !isClosed && (
+      {canUpload && !isClosed && (
         <section className="rounded-xl border p-3 sm:p-4 space-y-3">
           <h3 className="font-semibold text-sm sm:text-base">Subir comprobante</h3>
           <p className="text-xs text-gray-600">JPG/PNG/PDF · máx. 10MB</p>

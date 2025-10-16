@@ -47,26 +47,37 @@ export async function POST(req: Request) {
       )
     }
 
-    // ✅ VALIDAR LÍMITES DE COMPRA
-    const limitCheck = await checkPurchaseLimits(userId, ids.length)
-    if (!limitCheck.canPurchase) {
-      return NextResponse.json(
-        {
-          error: limitCheck.reason,
-          limitExceeded: true,
-          details: {
-            activePurchases: limitCheck.activePurchases,
-            maxPurchases: limitCheck.maxPurchases,
-            nextAvailableAt: limitCheck.nextAvailableAt,
-            hoursRemaining: limitCheck.hoursRemaining,
-          },
-        },
-        { status: 429 }
-      )
-    }
-
     const admin = supabaseAdmin()
     const nowIso = new Date().toISOString()
+
+    // 👇 NUEVO: Verificar si es vendedor AL INICIO
+    const { data: userData } = await admin
+      .from('app_users')
+      .select('role')
+      .eq('id', userId)
+      .single()
+
+    const isVendedor = userData?.role === 'vendedor'
+
+    // ✅ VALIDAR LÍMITES DE COMPRA (solo si NO es vendedor)
+    if (!isVendedor) {
+      const limitCheck = await checkPurchaseLimits(userId, ids.length)
+      if (!limitCheck.canPurchase) {
+        return NextResponse.json(
+          {
+            error: limitCheck.reason,
+            limitExceeded: true,
+            details: {
+              activePurchases: limitCheck.activePurchases,
+              maxPurchases: limitCheck.maxPurchases,
+              nextAvailableAt: limitCheck.nextAvailableAt,
+              hoursRemaining: limitCheck.hoursRemaining,
+            },
+          },
+          { status: 429 }
+        )
+      }
+    }
 
     // estado actual de esos números
     const { data: rows, error: rowsErr } = await admin
@@ -148,12 +159,12 @@ export async function POST(req: Request) {
         .map((r) => r.id)
 
       if (attachIds.length) {
-        // 👇 CORREGIDO: Agregamos hold_expires_at: null
         await admin
           .from('raffle_numbers')
           .update({ 
             order_id: existingOrderId, 
-            hold_expires_at: null,  // 🔧 SOLUCIÓN
+            hold_expires_at: null,
+            status: isVendedor ? 'sold' : 'held',  // 👈 NUEVO
             updated_at: nowIso 
           })
           .in('id', attachIds)
@@ -184,11 +195,12 @@ export async function POST(req: Request) {
 
     let orderId: string
 
+    // 👇 NUEVO: Estado inicial según si es vendedor
     const tryInsert = await admin
       .from('orders')
       .insert({
         user_id: userId,
-        status: 'awaiting_proof',
+        status: isVendedor ? 'paid' : 'awaiting_proof',  // 👈 CAMBIO
         total_amount: ids.length * PRICE,
         price_per_number: PRICE,
         fingerprint,
@@ -207,7 +219,7 @@ export async function POST(req: Request) {
         .select('id')
         .eq('user_id', userId)
         .eq('fingerprint', fingerprint)
-        .in('status', ['awaiting_proof', 'under_review'])
+        .in('status', ['awaiting_proof', 'under_review', 'paid'])  // 👈 AGREGADO 'paid'
         .single()
 
       if (existing.error || !existing.data) {
@@ -228,12 +240,13 @@ export async function POST(req: Request) {
       orderId = (tryInsert.data as { id: string }).id
     }
 
-    // 👇 CORREGIDO: Agregamos hold_expires_at: null
+    // 👇 NUEVO: Estado de números según si es vendedor
     await admin
       .from('raffle_numbers')
       .update({ 
         order_id: orderId, 
-        hold_expires_at: null,  // 🔧 SOLUCIÓN
+        hold_expires_at: null,
+        status: isVendedor ? 'sold' : 'held',  // 👈 CAMBIO
         updated_at: nowIso 
       })
       .in('id', ids)

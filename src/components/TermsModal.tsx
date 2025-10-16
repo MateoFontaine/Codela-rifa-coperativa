@@ -34,7 +34,7 @@ export default function TermsModal({ isOpen, onClose }: TermsModalProps) {
             <section>
               <h3 className="text-xl font-bold text-gray-900 mb-3">1. ORGANIZACIÓN Y OBJETIVO</h3>
               <div className="space-y-2 text-gray-700">
-                <p><strong>1.1. Organizador del Sorteo:</strong> La rifa es organizada y ejecutada por la Asociación Cooperadora de la ESCUELA N° 6 "MALVINAS ARGENTINAS", con domicilio en Av. Martín Pescador, B7167 Pinamar, Provincia de Buenos Aires (en adelante, la "Entidad Organizadora").</p>
+                <p><strong>1.1. Organizador del Sorteo:</strong> La rifa es organizada y ejecutada por la Asociación Cooperadora de la ESCUELA N° 6 "MALVINAS ARGENTINAS", con domicilio en Avda Martín Pescador y Albacora, Pinamar CP 7167 Pcia de Bs As (en adelante, la "Entidad Organizadora").</p>
                 <p><strong>1.2. Finalidad:</strong> El objetivo de la rifa es la recaudación de fondos destinados íntegramente para sostener y mejorar tanto la infraestructura escolar como las iniciativas educativas que enriquecen el aprendizaje diario de la escuela.</p>
               </div>
             </section>
@@ -44,18 +44,18 @@ export default function TermsModal({ isOpen, onClose }: TermsModalProps) {
               <div className="space-y-2 text-gray-700">
                 <p><strong>2.1. Aceptación de Bases:</strong> La participación en la rifa implica la aceptación plena e incondicional de todos los presentes Términos y Condiciones.</p>
                 <p><strong>2.2. Participantes:</strong> Podrá participar cualquier persona mayor de 18 años en adelante.</p>
-                <p><strong>2.3. Método de Participación:</strong> La participación se formaliza mediante la compra de los Billetes Virtuales a través de esta plataforma.</p>
+                <p><strong>2.3. Método de Participación:</strong> La participación se formaliza mediante la compra de los Billetes Virtuales a través de esta plataforma. Una vez elegidos los números, se deben abonar, adjuntando comprobante para su posterior control. Dentro de las 24 hs de efectuada la compra, se verificarán los datos, y se confirmará la compra en caso que se cumplan los requisitos, y los números elegidos ya no estarán disponibles en la grilla.</p>
               </div>
             </section>
 
             <section>
               <h3 className="text-xl font-bold text-gray-900 mb-3">3. MECÁNICA DEL SORTEO Y PREMIOS</h3>
               <div className="space-y-2 text-gray-700">
-                <p><strong>3.1. Vigencia:</strong> El período de venta y participación de la rifa es desde el 15/10/2025 hasta el 25/12/2025.</p>
+                <p><strong>3.1. Vigencia:</strong> El período de venta y participación de la rifa es desde la fecha de lanzamiento: 15/10/25 hasta el 22/12/25.</p>
                 <p><strong>3.2. Sorteo:</strong> El sorteo se realizará el día 26 de diciembre de 2025 a través de La Lotería Provincial (Bs As) conocido como sorteo del Gordo de Navidad.</p>
-                <p><strong>3.3. Método de Sorteo:</strong> Mediante el sorteo de Lotería Provincial para el Gordo de Navidad.</p>
-                <p><strong>3.4. Premios:</strong> Existe un solo premio: 1 camiseta del seleccionado argentino de fútbol, firmada por varios de los campeones del mundo Qatar 2022, incluido Lionel Messi, enmarcada.</p>
-                <p><strong>3.5. Ganador:</strong> Sale o Sale. El beneficiario/a será el que compró el número que salió sorteado por la Lotería Provincial en la fecha indicada. En caso de que el número ganador no se haya vendido, define el número que ocupa el puesto 2, y así sucesivamente hasta que se obtenga un ganador/a.</p>
+                <p><strong>3.3. Método de Sorteo:</strong> Mediante el sorteo de Lotería Provincial para el Gordo de Navidad, previsto para el día 26/12/25.</p>
+                <p><strong>3.4. Premio:</strong> Existe un solo premio: 1 camiseta del seleccionado argentino de fútbol, firmada por varios de los campeones del mundo Qatar 2022, incluido Lionel Messi, enmarcada.</p>
+                <p><strong>3.5. Ganador/a:</strong> Sale o Sale. El beneficiario/a será el que compró el número que salió sorteado por la Lotería Provincial en la fecha indicada. En caso de que el número ganador no se haya vendido, define el número que ocupa el puesto 2, y así sucesivamente hasta que se obtenga un ganador/a.</p>
                 <p><strong>3.6. Entrega de Premios:</strong> El ganador será contactado a través de WhatsApp, para informarle que puede retirar el premio (en caso que tenga domicilio en la ciudad de Pinamar) o se coordinará el envío a cargo de la Entidad Organizadora, al domicilio que indique la persona beneficiaria.</p>
               </div>
             </section>
@@ -101,7 +101,7 @@ export default function TermsModal({ isOpen, onClose }: TermsModalProps) {
               <h4 className="text-lg font-semibold text-gray-900 mb-2">3. USO Y COMPARTICIÓN DE LA INFORMACIÓN</h4>
               <p className="text-gray-700 mb-4">Utilizamos su información personal exclusivamente para la gestión de su participación y para contactarlo en caso de resultar ganador. Su información solo será compartida con la Asociación Cooperadora de ESCUELA N° 6 "MALVINAS ARGENTINAS" para que puedan validar su participación y gestionar la entrega del premio.</p>
 
-              <h4 className="text-lg font-semibold text-gray-900 mb-2">4. CLÁUSULA DE EXENCIÓN DE RESPONSABILIDAD (PREMIOS Y FONDOS)</h4>
+              <h4 className="text-lg font-semibold text-gray-900 mb-2">4. CLÁUSULA DE EXENCIÓN DE RESPONSABILIDAD (PREMIO Y FONDOS)</h4>
               <div className="space-y-2 text-gray-700 mb-4">
                 <p><strong>4.1. Naturaleza de la Plataforma:</strong> WebRifa es una herramienta tecnológica cuyo único propósito es facilitar la gestión digital de registros y la asignación de números de rifa. WebRifa no es el organizador ni el administrador de la rifa.</p>
                 <p><strong>4.2. Responsabilidad Exclusiva del Tercero:</strong> La Asociación Cooperadora de ESCUELA N° 6 "MALVINAS ARGENTINAS" es la única responsable legal de:</p>

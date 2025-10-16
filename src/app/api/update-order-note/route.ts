@@ -32,15 +32,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
     }
 
-    // No permitir editar si ya está pagada o cancelada
-    if (order.status === 'paid' || order.status === 'canceled') {
-      return NextResponse.json({ error: 'La orden ya está cerrada' }, { status: 409 })
+    // 👇 CAMBIO: Solo impedir editar si está cancelada
+    if (order.status === 'canceled') {
+      return NextResponse.json({ error: 'No se puede editar una orden cancelada' }, { status: 409 })
     }
 
     // Actualizar la nota
     const { error: updateErr } = await admin
       .from('orders')
-      .update({ 
+      .update({
         notes: notes.trim() || null,
         updated_at: new Date().toISOString()
       })

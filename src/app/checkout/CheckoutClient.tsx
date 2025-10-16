@@ -317,7 +317,7 @@ function CheckoutPageInner() {
 
   const canUpload = orderStatus === 'awaiting_proof' || orderStatus === 'rejected'
   const showProofBlock = !!proofUrl
-  const isClosed = orderStatus === 'paid' || orderStatus === 'canceled'
+  const isClosed = orderStatus === 'canceled' // Solo canceladas están cerradas
 
   if (loading) {
     return <CheckoutLoader />

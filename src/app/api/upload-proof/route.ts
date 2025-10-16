@@ -13,11 +13,11 @@ type Status =
 type Body = {
   userId: string
   orderId: string
-  filePath: string      // p.ej. "ORDERID/1723494450000.jpg"
-  publicUrl: string     // URL pública (dev) o firmada (prod)
+  filePath: string // p.ej. "ORDERID/1723494450000.jpg"
+  publicUrl: string // URL pública (dev) o firmada (prod)
   fileType?: string
   sizeBytes?: number
-  notes?: string | null  // 👈 NUEVO: Campo para notas
+  notes?: string | null
 }
 
 type OrderRow = {
@@ -30,6 +30,7 @@ type OrderRow = {
 export async function POST(req: Request) {
   try {
     const { userId, orderId, filePath, publicUrl, fileType, sizeBytes, notes } = (await req.json()) as Body
+    
     if (!userId || !orderId || !filePath || !publicUrl) {
       return NextResponse.json({ error: 'Faltan datos' }, { status: 400 })
     }
@@ -65,7 +66,7 @@ export async function POST(req: Request) {
           file_path: filePath,
           file_type: fileType ?? null,
           size_bytes: sizeBytes ?? null,
-          notes: notes ?? null,  // 👈 NUEVO: Guardamos las notas
+          notes: notes ?? null,
           uploaded_at: new Date().toISOString(),
         },
         { onConflict: 'order_id' }
@@ -75,14 +76,33 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: upErr.message }, { status: 400 })
     }
 
-    // 3) Pasar orden a "under_review"
+    // 3) 👇 NUEVO: Verificar si es vendedor
+    const { data: userData } = await admin
+      .from('app_users')
+      .select('role')
+      .eq('id', ord.user_id)
+      .single()
+
+    const isVendedor = userData?.role === 'vendedor'
+
+    // Si es vendedor → paid, si no → under_review
+    const newStatus = isVendedor ? 'paid' : 'under_review'
+
     const { error: upOrd } = await admin
       .from('orders')
-      .update({ status: 'under_review', updated_at: new Date().toISOString() })
+      .update({ status: newStatus, updated_at: new Date().toISOString() })
       .eq('id', orderId)
 
     if (upOrd) {
       return NextResponse.json({ error: upOrd.message }, { status: 400 })
+    }
+
+    // 👇 NUEVO: Si es vendedor, marcar números como sold
+    if (isVendedor) {
+      await admin
+        .from('raffle_numbers')
+        .update({ status: 'sold', updated_at: new Date().toISOString() })
+        .eq('order_id', orderId)
     }
 
     // 4) Email deshabilitado temporalmente
@@ -93,7 +113,6 @@ export async function POST(req: Request) {
         .select('email')
         .eq('id', userId)
         .single()
-
       if (userErr || !userRow?.email) {
         console.error('Error obteniendo email del usuario:', userErr)
       } else {
@@ -102,7 +121,6 @@ export async function POST(req: Request) {
           orderId,
           ord.total_amount || 0
         )
-        
         if (!emailResult.success) {
           console.error('Error enviando email de comprobante:', emailResult.error)
         }

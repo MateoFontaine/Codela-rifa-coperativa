@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabaseBrowser } from '@/lib/supabase'
 
+
+/* Esto es un comentario de prueba*/
+
 const formatNumber = (n: number) => String(n).padStart(5, '0')
 
 export default function MyNumbers({ userId }: { userId?: string | null }) {

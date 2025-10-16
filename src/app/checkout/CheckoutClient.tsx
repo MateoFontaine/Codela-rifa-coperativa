@@ -370,14 +370,14 @@ function CheckoutPageInner() {
         <section className="rounded-xl border p-3 sm:p-4 space-y-3">
           <h3 className="font-semibold text-sm sm:text-base">Nota o aclaración (opcional)</h3>
           <p className="text-xs text-gray-600">
-            Dejá cualquier comentario sobre tu transferencia
+            Dejá cualquier comentario sobre tu compra
           </p>
           
           <div className="space-y-2">
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Ej: Transferí desde cuenta de mi hermano, el monto incluye comisión..."
+              placeholder="Ej: Compra de mi Hermano Juan, Numeros del grupo de Futbol... etc"
               maxLength={500}
               rows={3}
               className="w-full px-3 py-2 text-xs sm:text-sm border border-gray-300 rounded-xl focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none"

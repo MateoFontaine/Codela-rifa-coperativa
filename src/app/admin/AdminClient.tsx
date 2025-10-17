@@ -13,6 +13,7 @@ type Order = {
   id: string
   user_id: string
   email: string
+  dni?: string | number | null 
   status: Status
   total_amount: number
   price_per_number: number
@@ -156,19 +157,23 @@ export default function AdminPage() {
   }
 
   async function enrichOrdersWithPhones(ordersIn: Order[]): Promise<Order[]> {
-    const ids = Array.from(new Set(ordersIn.map(o => o.user_id))).filter(Boolean)
-    if (ids.length === 0) return ordersIn
+  const ids = Array.from(new Set(ordersIn.map(o => o.user_id))).filter(Boolean)
+  if (ids.length === 0) return ordersIn
 
-    const { data: usersData, error } = await supa
-      .from('app_users')
-      .select('id, phone')
-      .in('id', ids)
+  const { data: usersData, error } = await supa
+    .from('app_users')
+    .select('id, phone, dni')  // 👈 AGREGAR dni aquí
+    .in('id', ids)
 
-    if (error || !usersData) return ordersIn
+  if (error || !usersData) return ordersIn
 
-    const byId = new Map(usersData.map(u => [u.id, u.phone ?? null]))
-    return ordersIn.map(o => ({ ...o, phone: byId.get(o.user_id) ?? null }))
-  }
+  const byId = new Map(usersData.map(u => [u.id, { phone: u.phone ?? null, dni: u.dni ?? null }]))  // 👈 CAMBIAR esta línea
+  return ordersIn.map(o => ({ 
+    ...o, 
+    phone: byId.get(o.user_id)?.phone ?? null,  // 👈 CAMBIAR
+    dni: byId.get(o.user_id)?.dni ?? null  // 👈 AGREGAR
+  }))
+}
 
   const handleResetPassword = async () => {
     if (!me || !resetPasswordForm.email || !resetPasswordForm.password) {
@@ -667,118 +672,129 @@ export default function AdminPage() {
         <div ref={scrollContainerRef} className="overflow-x-auto lg:overflow-x-visible max-h-[600px] overflow-y-auto">
           <table className="min-w-full text-sm">
             <thead>
-              <tr className="text-left bg-gray-50">
-                <th className="p-3 min-w-[120px] lg:min-w-0">Orden</th>
-                <th className="p-3 min-w-[180px] lg:min-w-0">Usuario</th>
-                <th className="p-3 min-w-[100px] lg:min-w-0">Contacto</th>
-                {activeTab !== 'completed' && <th className="p-3 min-w-[80px] lg:min-w-0">Números</th>}
-                <th className="p-3 min-w-[100px] lg:min-w-0">Total</th>
-                <th className="p-3 min-w-[140px] lg:min-w-0">Estado</th>
-                <th className="p-3 min-w-[100px] lg:min-w-0">Comprobante</th>
-                <th className="p-3 min-w-[120px] lg:min-w-0">Acciones</th>
-              </tr>
-            </thead>
+  <tr className="text-left bg-gray-50">
+    <th className="p-3 min-w-[120px] lg:min-w-0">Orden</th>
+    <th className="p-3 min-w-[180px] lg:min-w-0">Usuario</th>
+    <th className="p-3 min-w-[100px] lg:min-w-0">DNI</th>  {/* 👈 NUEVA COLUMNA */}
+    <th className="p-3 min-w-[100px] lg:min-w-0">Contacto</th>
+    {activeTab !== 'completed' && <th className="p-3 min-w-[80px] lg:min-w-0">Números</th>}
+    <th className="p-3 min-w-[100px] lg:min-w-0">Total</th>
+    <th className="p-3 min-w-[140px] lg:min-w-0">Estado</th>
+    <th className="p-3 min-w-[100px] lg:min-w-0">Comprobante</th>
+    <th className="p-3 min-w-[120px] lg:min-w-0">Acciones</th>
+  </tr>
+</thead>
             <tbody>
-              {filteredOrders.map(o => {
-                const wa = waHrefFrom(o.phone)
-                const hasPhone = Boolean(o.phone && wa)
-                return (
-                  <tr key={o.id} className="border-t hover:bg-gray-50">
-                    <td className="p-3">
-                      {o.id.slice(0, 8)}…
-                      <div className="text-xs text-gray-500">
-                        {new Date(o.created_at).toLocaleString('es-AR')}
-                      </div>
-                    </td>
-                    <td className="p-3">{o.email}</td>
-                    
-                    <td className="p-3">
-                      <div className="flex gap-2">
-                        <a
-                          href={hasPhone ? wa! : '#'}
-                          target="_blank"
-                          rel="noreferrer"
-                          className={`text-green-600 hover:text-green-700 ${!hasPhone ? 'pointer-events-none opacity-40' : ''}`}
-                          title={hasPhone ? `WhatsApp: ${o.phone}` : 'Sin teléfono'}
-                        >
-                          <MessageCircle size={20} />
-                        </a>
-                        <a
-                          href={o.phone ? `tel:${o.phone}` : '#'}
-                          className={`text-blue-600 hover:text-blue-700 ${!o.phone ? 'pointer-events-none opacity-40' : ''}`}
-                          title={o.phone ? `Llamar: ${o.phone}` : 'Sin teléfono'}
-                        >
-                          <Phone size={20} />
-                        </a>
-                      </div>
-                    </td>
+  {filteredOrders.map(o => {
+    const wa = waHrefFrom(o.phone)
+    const hasPhone = Boolean(o.phone && wa)
+    return (
+      <tr key={o.id} className="border-t hover:bg-gray-50">
+        <td className="p-3">
+          {o.id.slice(0, 8)}…
+          <div className="text-xs text-gray-500">
+            {new Date(o.created_at).toLocaleString('es-AR')}
+          </div>
+        </td>
+        <td className="p-3">{o.email}</td>
+        
+        {/* 👇 NUEVA CELDA DEL DNI */}
+        <td className="p-3">
+          {o.dni ? (
+            <span className="text-sm font-mono">{o.dni}</span>
+          ) : (
+            <span className="text-gray-400 text-xs">Sin DNI</span>
+          )}
+        </td>
+        
+        <td className="p-3">
+          <div className="flex gap-2">
+            <a
+              href={hasPhone ? wa! : '#'}
+              target="_blank"
+              rel="noreferrer"
+              className={`text-green-600 hover:text-green-700 ${!hasPhone ? 'pointer-events-none opacity-40' : ''}`}
+              title={hasPhone ? `WhatsApp: ${o.phone}` : 'Sin teléfono'}
+            >
+              <MessageCircle size={20} />
+            </a>
+            <a
+              href={o.phone ? `tel:${o.phone}` : '#'}
+              className={`text-blue-600 hover:text-blue-700 ${!o.phone ? 'pointer-events-none opacity-40' : ''}`}
+              title={o.phone ? `Llamar: ${o.phone}` : 'Sin teléfono'}
+            >
+              <Phone size={20} />
+            </a>
+          </div>
+        </td>
 
-                    {activeTab !== 'completed' && <td className="p-3">{o.numbers.length}</td>}
-                    <td className="p-3 whitespace-nowrap font-medium">
-                      ${o.total_amount?.toLocaleString('es-AR')}
-                    </td>
-                    
-                    <td className="p-3">
-                      <span className={`px-2.5 py-1 rounded-lg text-xs whitespace-nowrap inline-block ${STATUS_STYLE[o.status]}`}>
-                        {STATUS_LABEL[o.status]}
-                      </span>
-                    </td>
-                    
-                    <td className="p-3">
-                      {o.proofUrl ? (
-                        <a 
-                          href={o.proofUrl} 
-                          target="_blank" 
-                          rel="noreferrer" 
-                          className="text-blue-600 hover:underline"
-                        >
-                          Ver
-                        </a>
-                      ) : (
-                        <span className="text-gray-400">—</span>
-                      )}
-                    </td>
-                    
-                    <td className="p-3">
-                      {o.status !== 'paid' && o.status !== 'canceled' && (
-                        <div className="flex flex-col gap-1.5">
-                          <button 
-                            onClick={() => openConfirmModal('mark-paid', o)}
-                            disabled={processingOrder === o.id}
-                            className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs whitespace-nowrap hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            Acreditar
-                          </button>
-                          <button 
-                            onClick={() => openConfirmModal('reject', o)}
-                            disabled={processingOrder === o.id}
-                            className="px-3 py-1.5 rounded-lg bg-amber-500 text-white text-xs whitespace-nowrap hover:bg-amber-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            Rechazar
-                          </button>
-                          <button 
-                            onClick={() => openConfirmModal('cancel', o)}
-                            disabled={processingOrder === o.id}
-                            className="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-xs whitespace-nowrap hover:bg-rose-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            Cancelar
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-              {filteredOrders.length === 0 && (
-                <tr>
-                  <td className="p-4 text-center text-gray-500" colSpan={activeTab !== 'completed' ? 8 : 7}>
-                    {filter 
-                      ? 'No hay coincidencias con tu búsqueda' 
-                      : 'No hay órdenes en esta categoría'}
-                  </td>
-                </tr>
-              )}
-            </tbody>
+        {activeTab !== 'completed' && <td className="p-3">{o.numbers.length}</td>}
+        <td className="p-3 whitespace-nowrap font-medium">
+          ${o.total_amount?.toLocaleString('es-AR')}
+        </td>
+        
+        <td className="p-3">
+          <span className={`px-2.5 py-1 rounded-lg text-xs whitespace-nowrap inline-block ${STATUS_STYLE[o.status]}`}>
+            {STATUS_LABEL[o.status]}
+          </span>
+        </td>
+        
+        <td className="p-3">
+          {o.proofUrl ? (
+            <a 
+              href={o.proofUrl} 
+              target="_blank" 
+              rel="noreferrer" 
+              className="text-blue-600 hover:underline"
+            >
+              Ver
+            </a>
+          ) : (
+            <span className="text-gray-400">—</span>
+          )}
+        </td>
+        
+        <td className="p-3">
+          {o.status !== 'paid' && o.status !== 'canceled' && (
+            <div className="flex flex-col gap-1.5">
+              <button 
+                onClick={() => openConfirmModal('mark-paid', o)}
+                disabled={processingOrder === o.id}
+                className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs whitespace-nowrap hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Acreditar
+              </button>
+              <button 
+                onClick={() => openConfirmModal('reject', o)}
+                disabled={processingOrder === o.id}
+                className="px-3 py-1.5 rounded-lg bg-amber-500 text-white text-xs whitespace-nowrap hover:bg-amber-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Rechazar
+              </button>
+              <button 
+                onClick={() => openConfirmModal('cancel', o)}
+                disabled={processingOrder === o.id}
+                className="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-xs whitespace-nowrap hover:bg-rose-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancelar
+              </button>
+            </div>
+          )}
+        </td>
+      </tr>
+    )
+  })}
+  {filteredOrders.length === 0 && (
+    <tr>
+      <td className="p-4 text-center text-gray-500" colSpan={activeTab !== 'completed' ? 9 : 8}>
+        {/* 👆 Cambié el colSpan de 8 a 9 (o de 7 a 8) */}
+        {filter 
+          ? 'No hay coincidencias con tu búsqueda' 
+          : 'No hay órdenes en esta categoría'}
+      </td>
+    </tr>
+  )}
+</tbody>
           </table>
           
           {/* Indicador de carga al final */}

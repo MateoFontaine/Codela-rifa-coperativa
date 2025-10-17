@@ -7,6 +7,7 @@ type Body = { userId: string; orderId: string }
 export async function POST(req: Request) {
   try {
     const { userId, orderId } = await req.json()
+    
     if (!userId || !orderId) {
       return NextResponse.json({ error: 'Faltan datos' }, { status: 400 })
     }
@@ -16,7 +17,7 @@ export async function POST(req: Request) {
     // Verificar que el admin existe
     const { data: adminUser } = await admin
       .from('app_users')
-      .select('is_admin')
+      .select('is_admin, email')  // 👈 CAMBIO: Seleccionar email también
       .eq('id', userId)
       .single()
 
@@ -27,7 +28,7 @@ export async function POST(req: Request) {
     // Obtener la orden y su dueño
     const { data: order } = await admin
       .from('orders')
-      .select('id, user_id, status')
+      .select('id, user_id, status, total_amount')  // 👈 CAMBIO: Agregar total_amount
       .eq('id', orderId)
       .single()
 
@@ -53,6 +54,33 @@ export async function POST(req: Request) {
 
     // Actualizar contador de compras activas del usuario
     await updateActivePurchasesCount(order.user_id)
+
+    // 👇 Log de la acción
+    const { data: orderUser } = await admin
+      .from('app_users')
+      .select('email')
+      .eq('id', order.user_id)
+      .single()
+
+    const { data: orderNums } = await admin
+      .from('raffle_numbers')
+      .select('id')
+      .eq('order_id', orderId)
+
+    const { error: logError } = await admin.from('admin_logs').insert({
+      admin_id: userId,
+      admin_email: adminUser.email || 'unknown',  // 👈 CAMBIO: Usar adminUser del inicio
+      action: 'mark_paid',
+      order_id: orderId,
+      order_user_email: orderUser?.email || 'unknown',
+      order_total: order.total_amount,
+      numbers_count: orderNums?.length || 0,
+      metadata: { numbers: orderNums?.map(n => n.id) || [] }
+    })
+
+    if (logError) {
+      console.error('❌ Error guardando log:', logError)
+    }
 
     return NextResponse.json({ ok: true })
   } catch (e: unknown) {

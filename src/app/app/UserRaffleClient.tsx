@@ -554,10 +554,10 @@ export default function UserRaffle() {
       <h3 className="font-semibold mb-3">Acciones rápidas</h3>
       <p className="text-xs text-gray-600 mb-3">Seleccionar al azar:</p>
       <div className="flex gap-2">
-        <RandomButton qty={1} disabled={isBlocked} />
-        <RandomButton qty={5} disabled={isBlocked} />
-        <RandomButton qty={10} disabled={isBlocked} />
-      </div>
+  <RandomButton qty={3} disabled={isBlocked} />   {/* 👈 +3 */}
+  <RandomButton qty={5} disabled={isBlocked} />   {/* 👈 +5 */}
+  <RandomButton qty={10} disabled={isBlocked} />  {/* 👈 +10 */}
+</div>
     </div>
   </div>
 
@@ -765,10 +765,10 @@ export default function UserRaffle() {
             <div className="bg-white border rounded-2xl p-4 shadow-sm">
               <h3 className="font-semibold mb-3">Acciones rápidas</h3>
               <div className="flex gap-2">
-                <RandomButton qty={1} disabled={isBlocked} />
-                <RandomButton qty={5} disabled={isBlocked} />
-                <RandomButton qty={10} disabled={isBlocked} />
-              </div>
+  <RandomButton qty={3} disabled={isBlocked} />   {/* 👈 +3 */}
+  <RandomButton qty={5} disabled={isBlocked} />   {/* 👈 +5 */}
+  <RandomButton qty={10} disabled={isBlocked} />  {/* 👈 +10 */}
+</div>
             </div>
 
             <div className="bg-white border rounded-2xl p-4 shadow-sm">

@@ -763,7 +763,7 @@ export default function UserRaffle() {
             </div>
 
             <div className="bg-white border rounded-2xl p-4 shadow-sm">
-              <h3 className="font-semibold mb-3">Acciones rápidas</h3>
+              <h3 className="font-semibold mb-3">Números al azar</h3>
               <div className="flex gap-2">
   <RandomButton qty={3} disabled={isBlocked} />   {/* 👈 +3 */}
   <RandomButton qty={5} disabled={isBlocked} />   {/* 👈 +5 */}

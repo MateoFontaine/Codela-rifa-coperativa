@@ -119,27 +119,38 @@ export default function HomePage() {
 
           {/* CTA Principal */}
           <div className="mt-6 md:mt-10 text-center">
-            <p className="text-sm md:text-base lg:text-lg font-semibold text-gray-700 mb-3 md:mb-4 px-2">
-              👉 Participar es fácil, rápido y divertido. ¡Comprá tus números y cruzá los dedos, que la Scaloneta puede ser tuya! 🇦🇷💫
-            </p>
-            
-            <div className="flex flex-col sm:flex-row gap-3 md:gap-4 justify-center items-center px-4">
-              <Link
-                href="/app"
-                className="w-full sm:w-auto group relative px-6 md:px-8 py-3 md:py-5 rounded-xl md:rounded-2xl bg-gradient-to-r from-blue-600 via-cyan-500 to-blue-600 text-white font-black text-base md:text-lg lg:text-xl shadow-2xl hover:shadow-blue-500/50 transition-all duration-300 hover:scale-105 text-center"
-              >
-                <span className="relative z-10">🎟️ QUIERO MIS NÚMEROS</span>
-                <div className="absolute inset-0 rounded-xl md:rounded-2xl bg-gradient-to-r from-blue-700 via-cyan-600 to-blue-700 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              </Link>
-              
-              <Link
-                href="/auth/register"
-                className="w-full sm:w-auto px-6 md:px-8 py-3 md:py-5 rounded-xl md:rounded-2xl border-2 border-blue-600 text-blue-600 font-bold text-base md:text-lg hover:bg-blue-50 transition-all duration-300 text-center"
-              >
-                📝 Crear Cuenta Gratis
-              </Link>
-            </div>
-          </div>
+  <p className="text-sm md:text-base lg:text-lg font-semibold text-gray-700 mb-3 md:mb-4 px-2">
+    👉 Participar es fácil, rápido y divertido. ¡Comprá tus números y cruzá los dedos, que la Scaloneta puede ser tuya! 🇦🇷💫
+  </p>
+
+  {/* 👇 NUEVO: Banner de precio */}
+  <div className="mb-4 md:mb-6 flex justify-center px-4">
+    <div className="inline-flex items-center gap-3 px-6 md:px-8 py-3 md:py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-cyan-500 shadow-xl border-2 border-white">
+      <span className="text-2xl md:text-3xl">💰</span>
+      <div className="text-left">
+        <p className="text-white text-xs md:text-sm font-medium">Cada número cuesta</p>
+        <p className="text-white text-2xl md:text-3xl lg:text-4xl font-black">$1.000</p>
+      </div>
+      <span className="text-2xl md:text-3xl animate-pulse">✨</span>
+    </div>
+  </div>
+
+  <div className="flex flex-col sm:flex-row gap-3 md:gap-4 justify-center items-center px-4">
+    <Link
+      href="/app"
+      className="w-full sm:w-auto group relative px-6 md:px-8 py-3 md:py-5 rounded-xl md:rounded-2xl bg-gradient-to-r from-blue-600 via-cyan-500 to-blue-600 text-white font-black text-base md:text-lg lg:text-xl shadow-2xl hover:shadow-blue-500/50 transition-all duration-300 hover:scale-105 text-center"
+    >
+      <span className="relative z-10">🎟️ QUIERO MIS NÚMEROS</span>
+      <div className="absolute inset-0 rounded-xl md:rounded-2xl bg-gradient-to-r from-blue-700 via-cyan-600 to-blue-700 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+    </Link>
+    <Link
+      href="/auth/register"
+      className="w-full sm:w-auto px-6 md:px-8 py-3 md:py-5 rounded-xl md:rounded-2xl border-2 border-blue-600 text-blue-600 font-bold text-base md:text-lg hover:bg-blue-50 transition-all duration-300 text-center"
+    >
+      📝 Crear Cuenta Gratis
+    </Link>
+  </div>
+</div>
         </div>
       </section>
 

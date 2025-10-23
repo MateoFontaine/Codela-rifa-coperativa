@@ -372,8 +372,6 @@ export default function HomePage() {
           © {new Date().getFullYear()} Rifa Cooperativa · Hecho por{" "}
           <a className="text-blue-600" href="https://www.instagram.com/codela.estudio/">Codela</a>
         </div>
-
-        <p>eso</p>
       </footer>
     </main>
   );

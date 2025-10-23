@@ -290,7 +290,6 @@ export default function HomePage() {
           </div>
         </div>
       </section>
-
       {/* CÓMO FUNCIONA EL SORTEO */}
       <section className="max-w-6xl mx-auto px-4 py-8 md:py-12 bg-zinc-50">
         <h2 className="text-xl md:text-2xl lg:text-3xl font-semibold">
@@ -302,7 +301,7 @@ export default function HomePage() {
             { num: "1", title: "Elegí", subtitle: "Tus números", desc: "Entrá a la app, buscá y reservá. También podés sumar números al azar. Cada número cuesta $1.000." },
             { num: "2", title: "Pagá", subtitle: "Transferencia + comprobante", desc: "Tenés 1 hora para subir el comprobante desde el checkout. Si no, la reserva se libera automáticamente." },
             { num: "3", title: "Acreditación", subtitle: "Revisión del pago", desc: "Un admin revisa y acredita tu compra. Cuando esté aprobado, tus números quedan confirmados." },
-            { num: "4", title: "Sorteo", subtitle: "Lotería Provincial", desc: "El ganador/a se define por la Lotería Nacional en Navidad, según los resultados oficiales." }
+            { num: "4", title: "Sorteo", subtitle: "Lotería Provincial", desc: "El ganador/a se define por la Lotería Provincial en Navidad, según los resultados oficiales." }
           ].map((item) => (
             <div key={item.num} className="rounded-xl md:rounded-2xl border p-4 md:p-5 bg-white">
               <div className="text-xs md:text-sm font-medium text-zinc-500">{item.num}) {item.title}</div>
@@ -373,6 +372,8 @@ export default function HomePage() {
           © {new Date().getFullYear()} Rifa Cooperativa · Hecho por{" "}
           <a className="text-blue-600" href="https://www.instagram.com/codela.estudio/">Codela</a>
         </div>
+
+        <p>eso</p>
       </footer>
     </main>
   );

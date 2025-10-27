@@ -153,7 +153,8 @@ export default function HomePage() {
 </div>
         </div>
       </section>
-
+    
+      {/* ORDENANZA MUNICIPAL */}
       <section className="bg-gradient-to-br from-sky-50 to-blue-100 py-16 px-4">
   <div className="max-w-4xl mx-auto">
     <div className="bg-white rounded-2xl shadow-xl p-8 md:p-12">

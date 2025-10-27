@@ -11,25 +11,12 @@ type RandomAvailableResult = {
 export async function POST(req: Request) {
   try {
     const { limit = 100 } = await req.json()
-    
     const admin = supabaseAdmin()
-    const nowIso = new Date().toISOString()
 
-    // Primero liberar números vencidos
-    await admin
-      .from('raffle_numbers')
-      .update({
-        status: 'free',
-        held_by: null,
-        hold_expires_at: null,
-        order_id: null,
-        updated_at: nowIso,
-      })
-      .eq('status', 'held')
-      .lt('hold_expires_at', nowIso)
+    // 👇 ELIMINADO: Ya NO liberamos números vencidos porque no expiran
+    // (Todo el bloque de líneas 13-23 se elimina)
 
-    // Traer números disponibles usando una query que genere un offset aleatorio
-    // Primero contar cuántos hay disponibles
+    // Contar números disponibles
     const { count } = await admin
       .from('raffle_numbers')
       .select('*', { count: 'exact', head: true })
@@ -59,6 +46,7 @@ export async function POST(req: Request) {
       .sort(() => Math.random() - 0.5)
 
     return NextResponse.json({ results: shuffled })
+    
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'error'
     return NextResponse.json({ error: msg }, { status: 500 })

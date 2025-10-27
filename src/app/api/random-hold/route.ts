@@ -6,22 +6,23 @@ type Body = { userId: string; qty: number }
 type RpcRow = { num: number }
 
 const MAX_PER_ORDER = 50
-const HOLD_MINUTES = 10
 
 export async function POST(req: Request) {
   try {
     const { userId, qty } = (await req.json()) as Body
+    
     if (!userId || typeof qty !== 'number' || !Number.isFinite(qty)) {
       return NextResponse.json({ error: 'Faltan datos' }, { status: 400 })
     }
 
     const clamp = Math.max(1, Math.min(MAX_PER_ORDER, Math.floor(qty)))
-
     const admin = supabaseAdmin()
+
+    // 👇 CAMBIO: Ya NO pasamos p_minutes (sin expiración)
     const { data, error } = await admin.rpc('hold_random_numbers', {
       p_user: userId,
       p_qty: clamp,
-      p_minutes: HOLD_MINUTES,
+      p_minutes: null,  // 👈 O eliminá este parámetro si modificás la función RPC
     })
 
     if (error) {
@@ -30,9 +31,10 @@ export async function POST(req: Request) {
 
     const rows = (data as RpcRow[]) ?? []
     const held = rows.map(r => Number(r.num))
-    const expiresAt = new Date(Date.now() + HOLD_MINUTES * 60_000).toISOString()
 
-    return NextResponse.json({ held, expiresAt })
+    // 👇 CAMBIO: Ya NO devolvemos expiresAt
+    return NextResponse.json({ held })
+    
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Error servidor'
     return NextResponse.json({ error: msg }, { status: 500 })

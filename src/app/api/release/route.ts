@@ -12,6 +12,7 @@ type RaffleRow = {
 export async function POST(req: Request) {
   try {
     const { userId, numbers } = (await req.json()) as Body
+    
     if (!userId || !Array.isArray(numbers) || numbers.length === 0) {
       return NextResponse.json({ error: 'Faltan datos' }, { status: 400 })
     }
@@ -42,7 +43,7 @@ export async function POST(req: Request) {
         .update({
           status: 'free',
           held_by: null,
-          hold_expires_at: null,
+          hold_expires_at: null,  // 👈 Ya no es necesario pero no hace daño
           updated_at: new Date().toISOString(),
         })
         .in('id', releasable)
@@ -57,6 +58,7 @@ export async function POST(req: Request) {
     const skipped = ids.filter(id => !released.includes(id))
 
     return NextResponse.json({ released, skipped })
+    
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Error servidor'
     return NextResponse.json({ error: msg }, { status: 500 })

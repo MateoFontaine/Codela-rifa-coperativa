@@ -344,7 +344,7 @@ function CheckoutPageInner() {
               ) : (
                 <>
                   Te quedan <span className="font-bold font-mono">{timeLeft}</span> para subir tu comprobante.
-                  Si no lo hacés, tu orden se cancelará automáticamente.
+                  Y que tu orden pase a control automáticamente.
                 </>
               )}
             </p>

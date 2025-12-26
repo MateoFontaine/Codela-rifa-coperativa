@@ -70,36 +70,7 @@ export default function HomePage() {
             </p>
           </div>
 
-          {/* Countdown Timer */}
-          <div className="mt-6 md:mt-10 max-w-2xl mx-auto">
-  <div className="bg-white rounded-xl md:rounded-2xl shadow-2xl border-2 border-blue-200 p-4 md:p-6">
-    <div className="text-center mb-3 md:mb-4">
-      <p className="text-sm md:text-lg font-bold text-gray-800">
-        ⏱️ ¡Tenés tiempo hasta el 22 de diciembre!
-      </p>
-      <p className="text-xs md:text-sm text-gray-600 mt-1">Sorteo: 26 de Diciembre 2025</p>
-    </div>
-    
-    <div className="grid grid-cols-4 gap-2 md:gap-3">
-      <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg md:rounded-xl px-1 py-3 md:p-4 text-white text-center flex flex-col items-center justify-center">
-        <div className="text-2xl sm:text-3xl md:text-4xl font-black leading-none">{timeLeft.days}</div>
-        <div className="text-[9px] sm:text-[10px] md:text-xs font-medium mt-1 md:mt-1.5 leading-tight">DÍAS</div>
-      </div>
-      <div className="bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-lg md:rounded-xl px-1 py-3 md:p-4 text-white text-center flex flex-col items-center justify-center">
-        <div className="text-2xl sm:text-3xl md:text-4xl font-black leading-none">{timeLeft.hours}</div>
-        <div className="text-[9px] sm:text-[10px] md:text-xs font-medium mt-1 md:mt-1.5 leading-tight">HORAS</div>
-      </div>
-      <div className="bg-gradient-to-br from-blue-400 to-blue-500 rounded-lg md:rounded-xl px-1 py-3 md:p-4 text-white text-center flex flex-col items-center justify-center">
-        <div className="text-2xl sm:text-3xl md:text-4xl font-black leading-none">{timeLeft.minutes}</div>
-        <div className="text-[9px] sm:text-[10px] md:text-xs font-medium mt-1 md:mt-1.5 leading-tight">MIN</div>
-      </div>
-      <div className="bg-gradient-to-br from-cyan-400 to-cyan-500 rounded-lg md:rounded-xl px-1 py-3 md:p-4 text-white text-center flex flex-col items-center justify-center">
-        <div className="text-2xl sm:text-3xl md:text-4xl font-black leading-none">{timeLeft.seconds}</div>
-        <div className="text-[9px] sm:text-[10px] md:text-xs font-medium mt-1 md:mt-1.5 leading-tight">SEG</div>
-      </div>
-    </div>
-  </div>
-</div>
+         
 
           {/* Imagen de la Camiseta */}
           <div className="mt-6 md:mt-10 max-w-2xl mx-auto">

@@ -36,7 +36,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="es">
       <body className={`${inter.className} bg-gray-50 text-gray-900`}>
         <div className="min-h-dvh">
-          <Header />
           <main className="max-w-6xl mx-auto px-4 py-6">{children}</main>
         </div>
         <Toaster position="top-right" />
